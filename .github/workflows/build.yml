@@ -35,8 +35,7 @@ jobs:
           find app/src/main/java -name "*.java" -exec sed -i 's/.*setAppCacheEnabled.*/\/\/ &/' {} +
           find app/src/main/java -name "*.java" -exec sed -i 's/.*setAppCachePath.*/\/\/ &/' {} +
           
-          echo "3. Memperbaiki kode Firebase yang usang..."
-          find app/src/main/java -name "*.java" -exec sed -i 's/FirebaseInstanceId.getInstance().getToken()/FirebaseMessaging.getInstance().getToken().toString()/g' {} +
+          echo "3. Membersihkan sisa import usang Firebase..."
           find app/src/main/java -name "*.java" -exec sed -i 's/import com.google.firebase.iid.FirebaseInstanceId;/\/\/ import com.google.firebase.iid.FirebaseInstanceId;/g' {} +
           
           echo "4. Menambahkan Import FirebaseMessaging..."

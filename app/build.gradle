@@ -10,7 +10,7 @@ android {
     compileSdk 36
 
     defaultConfig {
-        applicationId "com.curva.ppob" // 2. UBAH APPLICATION ID KE NAMA ASLI APLIKASI
+        applicationId "com.curvapayment.id" // 2. UBAH APPLICATION ID KE NAMA ASLI APLIKASI
         minSdk 24 // KITA NAIKKAN KE 24 AGAR SESUAI STANDAR SDK 36 DAN PLAY STORE
         targetSdk 36
         versionCode 6

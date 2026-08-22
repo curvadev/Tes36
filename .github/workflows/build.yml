@@ -45,8 +45,9 @@ jobs:
           echo "5. Memperbaiki Ikon Notifikasi (bigLargeIcon)..."
           find app/src/main/java -name "MyFirebaseMessagingService.java" -exec sed -i 's/.bigLargeIcon(null)/.bigLargeIcon((android.graphics.Bitmap) null)/g' {} +
 
-          echo "6. Membersihkan peringatan Manifest..."
+          echo "6. Memperbaiki Manifest (FileProvider & Peringatan)..."
           sed -i 's/package="com.curva.ppob"//g' app/src/main/AndroidManifest.xml
+          sed -i 's/android.support.v4.content.FileProvider/androidx.core.content.FileProvider/g' app/src/main/AndroidManifest.xml
           
           echo "7. Memperbaiki Layout XML & PendingIntent..."
           find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.v4.widget.SwipeRefreshLayout/androidx.swiperefreshlayout.widget.SwipeRefreshLayout/g' {} +

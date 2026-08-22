@@ -1315,13 +1315,25 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void loadFcmToken() {
+        private void loadFcmToken() {
         try {
-            fcmToken = FirebaseInstanceId.getInstance().getToken();
+            com.google.firebase.messaging.FirebaseMessaging.getInstance().getToken()
+                .addOnCompleteListener(new com.google.android.gms.tasks.OnCompleteListener<String>() {
+                    @Override
+                    public void onComplete(com.google.android.gms.tasks.Task<String> task) {
+                        if (!task.isSuccessful()) {
+                            fcmToken = "";
+                            return;
+                        }
+                        fcmToken = task.getResult();
+                        sendFcmTokenToWeb(); // Otomatis kirim ke web jika sukses dapat token
+                    }
+                });
         } catch (Exception e) { 
             fcmToken = ""; 
         }
     }
+
 
     public void sendFcmTokenToWeb() {
         if (fcmToken == null || fcmToken.equals("")) { loadFcmToken(); }

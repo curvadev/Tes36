@@ -52,11 +52,10 @@ jobs:
       - name: Izin Eksekusi Gradle Wrapper
         run: chmod +x gradlew
 
-      - name: Menerapkan Variabel dari Web Admin
+      - name: 1. Menerapkan Perintah dari Web Admin
         run: |
           echo "Memeriksa perintah dari Web Admin..."
           
-          # 1. Ganti Versi jika ada
           if [ -n "${{ github.event.inputs.version_name }}" ]; then
             echo "Mengubah versionName menjadi ${{ github.event.inputs.version_name }}..."
             sed -i "s/versionName \".*\"/versionName \"${{ github.event.inputs.version_name }}\"/g" app/build.gradle
@@ -67,29 +66,56 @@ jobs:
             sed -i "s/versionCode .*/versionCode ${{ github.event.inputs.version_code }}/g" app/build.gradle
           fi
           
-          # 2. Ganti Logo jika ada
           if [ -n "${{ github.event.inputs.logo_url }}" ]; then
             echo "Mengunduh dan menimpa Logo (ic_launcher.png)..."
             wget -O app/src/main/res/drawable/ic_launcher.png "${{ github.event.inputs.logo_url }}"
           fi
           
-          # 3. Ganti Splash Screen jika ada
           if [ -n "${{ github.event.inputs.splash_url }}" ]; then
             echo "Mengunduh dan menimpa Splash Screen (splash_logo.png)..."
             wget -O app/src/main/res/drawable/splash_logo.png "${{ github.event.inputs.splash_url }}"
           fi
 
-      - name: Robot Penambal Kode & Manifest
+      - name: 2. Robot Penambal Kode (Java, XML, Manifest)
         run: |
+          echo "Mengubah Android Support lama menjadi AndroidX di JAVA..."
+          find app/src/main/java -name "*.java" -exec sed -i 's/android.support.v4.content.FileProvider/androidx.core.content.FileProvider/g' {} +
+          find app/src/main/java -name "*.java" -exec sed -i 's/android.support.v4.app.NotificationCompat/androidx.core.app.NotificationCompat/g' {} +
+          find app/src/main/java -name "*.java" -exec sed -i 's/android.support.v4.app.ActivityCompat/androidx.core.app.ActivityCompat/g' {} +
+          find app/src/main/java -name "*.java" -exec sed -i 's/android.support.v4.content.ContextCompat/androidx.core.content.ContextCompat/g' {} +
+          find app/src/main/java -name "*.java" -exec sed -i 's/android.support.annotation.NonNull/androidx.annotation.NonNull/g' {} +
+          
+          echo "Mematikan kode WebView yang sudah dihapus Google..."
+          find app/src/main/java -name "*.java" -exec sed -i 's/.*setAppCacheEnabled.*/\/\/ &/' {} +
+          find app/src/main/java -name "*.java" -exec sed -i 's/.*setAppCachePath.*/\/\/ &/' {} +
+          
           echo "Membersihkan sisa import usang Firebase..."
           find app/src/main/java -name "*.java" -exec sed -i 's/import com.google.firebase.iid.FirebaseInstanceId;/\/\/ import com.google.firebase.iid.FirebaseInstanceId;/g' {} +
+          
+          echo "Menambahkan Import FirebaseMessaging..."
+          find app/src/main/java -name "MainActivity.java" -exec sed -i '/import android.os.Bundle;/a import com.google.firebase.messaging.FirebaseMessaging;' {} +
+          
+          echo "Memperbaiki Ikon Notifikasi (bigLargeIcon)..."
+          find app/src/main/java -name "MyFirebaseMessagingService.java" -exec sed -i 's/.bigLargeIcon(null)/.bigLargeIcon((android.graphics.Bitmap) null)/g' {} +
+
           echo "Memperbaiki Manifest (FileProvider & Peringatan)..."
           sed -i 's/package="com.curva.ppob"//g' app/src/main/AndroidManifest.xml
           sed -i 's/android.support.v4.content.FileProvider/androidx.core.content.FileProvider/g' app/src/main/AndroidManifest.xml
+          
+          echo "Memperbaiki Layout XML & PendingIntent..."
+          find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.v4.widget.SwipeRefreshLayout/androidx.swiperefreshlayout.widget.SwipeRefreshLayout/g' {} +
+          find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.v4.widget.DrawerLayout/androidx.drawerlayout.widget.DrawerLayout/g' {} +
+          find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.design.widget.NavigationView/com.google.android.material.navigation.NavigationView/g' {} +
+          find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.v7.widget.RecyclerView/androidx.recyclerview.widget.RecyclerView/g' {} +
+          find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.v7.widget.CardView/androidx.cardview.widget.CardView/g' {} +
+          find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.v7.widget.Toolbar/androidx.appcompat.widget.Toolbar/g' {} +
+          find app/src/main/java -name "*.java" -exec sed -i 's/PendingIntent.FLAG_ONE_SHOT/PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE/g' {} +
+          find app/src/main/java -name "*.java" -exec sed -i 's/PendingIntent.FLAG_UPDATE_CURRENT/PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE/g' {} +
+          
           echo "Menambahkan Aturan Exported ke Manifest (Wajib Android 12+)..."
           sed -i 's/<activity android:name=".MainActivity"/<activity android:name=".MainActivity" android:exported="true"/g' app/src/main/AndroidManifest.xml
 
-      - name: Build Aplikasi (Sesuai Pilihan Web)
+      - name: 3. Build Aplikasi (Sesuai Pilihan Web)
         run: |
           if [ "${{ github.event.inputs.build_type }}" == "apk" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then
             echo "Mencetak APK..."
@@ -100,7 +126,7 @@ jobs:
             ./gradlew bundleRelease
           fi
 
-      - name: Tandatangani Aplikasi
+      - name: 4. Tandatangani Aplikasi
         run: |
           BUILD_TOOLS_DIR=$(ls -d $ANDROID_SDK_ROOT/build-tools/* | tail -1)
           APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
@@ -117,7 +143,7 @@ jobs:
             mv "$AAB_FILE" app/build/outputs/bundle/release/CurvaPayment-Final.aab
           fi
 
-      - name: Download Hasil ke Artifact GitHub
+      - name: 5. Download Hasil ke Artifact GitHub
         uses: actions/upload-artifact@v4
         with:
           name: Aplikasi-Final
@@ -125,7 +151,7 @@ jobs:
             app/build/outputs/apk/release/CurvaPayment-Final.apk
             app/build/outputs/bundle/release/CurvaPayment-Final.aab
 
-      - name: Kirim Hasil ke Server Admin Web
+      - name: 6. Kirim Hasil ke Server Admin Web
         if: github.event.inputs.server_upload_url != ''
         run: |
           echo "Mengirim file ke server web admin..."

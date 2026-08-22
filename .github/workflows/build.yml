@@ -22,7 +22,7 @@ jobs:
       - name: Izin Eksekusi Gradle Wrapper
         run: chmod +x gradlew
 
-      - name: Robot Penambal Kode (Java, XML, Manifest)
+      - name: Robot Penambal Kode (Java, XML, Manifest, PendingIntent)
         run: |
           echo "1. Mengubah Android Support lama menjadi AndroidX di JAVA..."
           find app/src/main/java -name "*.java" -exec sed -i 's/android.support.v4.content.FileProvider/androidx.core.content.FileProvider/g' {} +
@@ -48,10 +48,15 @@ jobs:
           echo "6. Membersihkan peringatan Manifest..."
           sed -i 's/package="com.curva.ppob"//g' app/src/main/AndroidManifest.xml
           
-          echo "7. Memperbaiki Layout XML (SwipeRefresh & Drawer)..."
+          echo "7. Memperbaiki Layout XML & PendingIntent..."
           find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.v4.widget.SwipeRefreshLayout/androidx.swiperefreshlayout.widget.SwipeRefreshLayout/g' {} +
           find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.v4.widget.DrawerLayout/androidx.drawerlayout.widget.DrawerLayout/g' {} +
           find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.design.widget.NavigationView/com.google.android.material.navigation.NavigationView/g' {} +
+          find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.v7.widget.RecyclerView/androidx.recyclerview.widget.RecyclerView/g' {} +
+          find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.v7.widget.CardView/androidx.cardview.widget.CardView/g' {} +
+          find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.v7.widget.Toolbar/androidx.appcompat.widget.Toolbar/g' {} +
+          find app/src/main/java -name "*.java" -exec sed -i 's/PendingIntent.FLAG_ONE_SHOT/PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE/g' {} +
+          find app/src/main/java -name "*.java" -exec sed -i 's/PendingIntent.FLAG_UPDATE_CURRENT/PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE/g' {} +
           
           echo "8. Menambahkan Aturan Exported ke Manifest (Wajib Android 12+)..."
           sed -i 's/<activity android:name=".MainActivity"/<activity android:name=".MainActivity" android:exported="true"/g' app/src/main/AndroidManifest.xml

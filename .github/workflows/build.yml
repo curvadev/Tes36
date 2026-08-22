@@ -38,6 +38,15 @@ jobs:
           echo "3. Memperbaiki kode Firebase yang usang..."
           find app/src/main/java -name "*.java" -exec sed -i 's/FirebaseInstanceId.getInstance().getToken()/FirebaseMessaging.getInstance().getToken().toString()/g' {} +
           find app/src/main/java -name "*.java" -exec sed -i 's/import com.google.firebase.iid.FirebaseInstanceId;/\/\/ import com.google.firebase.iid.FirebaseInstanceId;/g' {} +
+          
+          echo "4. Menambahkan Import FirebaseMessaging..."
+          find app/src/main/java -name "MainActivity.java" -exec sed -i '/import android.os.Bundle;/a import com.google.firebase.messaging.FirebaseMessaging;' {} +
+          
+          echo "5. Memperbaiki Ikon Notifikasi (bigLargeIcon)..."
+          find app/src/main/java -name "MyFirebaseMessagingService.java" -exec sed -i 's/.bigLargeIcon(null)/.bigLargeIcon((android.graphics.Bitmap) null)/g' {} +
+
+          echo "6. Membersihkan peringatan Manifest..."
+          sed -i 's/package="com.curva.ppob"//g' app/src/main/AndroidManifest.xml
 
       - name: Build APK Release
         run: ./gradlew assembleRelease

@@ -117,14 +117,19 @@ jobs:
 
       - name: 3. Build Aplikasi (Sesuai Pilihan Web)
         run: |
+          echo "Membersihkan Cache Mesin..."
+          BUILD_CMD="./gradlew clean"
+          
           if [ "${{ github.event.inputs.build_type }}" == "apk" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then
-            echo "Mencetak APK..."
-            ./gradlew assembleRelease
+            BUILD_CMD="$BUILD_CMD assembleRelease"
           fi
+          
           if [ "${{ github.event.inputs.build_type }}" == "aab" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then
-            echo "Mencetak AAB..."
-            ./gradlew bundleRelease
+            BUILD_CMD="$BUILD_CMD bundleRelease"
           fi
+          
+          echo "Menjalankan Perintah: $BUILD_CMD"
+          eval $BUILD_CMD
 
       - name: 4. Tandatangani Aplikasi
         run: |

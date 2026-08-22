@@ -51,8 +51,23 @@ jobs:
       - name: Build APK Release
         run: ./gradlew assembleRelease
 
+      - name: Tandatangani (Sign) dengan Kunci Tetap
+        run: |
+          echo "1. Mencari Alat Penandatangan (apksigner)..."
+          BUILD_TOOLS_DIR=$(ls -d $ANDROID_SDK_ROOT/build-tools/* | tail -1)
+          APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
+          
+          echo "2. Mencari file APK mentah..."
+          APK_FILE=$(find app/build/outputs/apk/release -name "*-unsigned.apk" | head -n 1)
+          
+          echo "3. Menandatangani menggunakan Kunci Master..."
+          $APKSIGNER sign --ks KUNCI-RAHASIA.keystore --ks-pass pass:curvapayment123 --key-pass pass:curvapayment123 --ks-key-alias curva_alias "$APK_FILE"
+          
+          echo "4. Mengganti nama file hasil..."
+          mv "$APK_FILE" app/build/outputs/apk/release/CurvaPayment-Modern.apk
+
       - name: Download Hasil Akhir
         uses: actions/upload-artifact@v4
         with:
           name: Aplikasi-Final-Siap-Publish
-          path: app/build/outputs/apk/release/*.apk
+          path: app/build/outputs/apk/release/CurvaPayment-Modern.apk

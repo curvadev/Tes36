@@ -160,6 +160,14 @@ jobs:
         if: github.event.inputs.server_upload_url != ''
         run: |
           echo "Mengirim file ke server web admin..."
+          
           if [ "${{ github.event.inputs.build_type }}" == "apk" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then
+            echo "Mengirim APK..."
             curl -F "file=@app/build/outputs/apk/release/CurvaPayment-Final.apk" -F "token=RAHASIA_UPLOAD_123" "${{ github.event.inputs.server_upload_url }}"
           fi
+          
+          if [ "${{ github.event.inputs.build_type }}" == "aab" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then
+            echo "Mengirim AAB..."
+            curl -F "file=@app/build/outputs/bundle/release/CurvaPayment-Final.aab" -F "token=RAHASIA_UPLOAD_123" "${{ github.event.inputs.server_upload_url }}"
+          fi
+

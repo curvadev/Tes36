@@ -14,7 +14,7 @@ android {
         minSdk 24 // KITA NAIKKAN KE 24 AGAR SESUAI STANDAR SDK 36 DAN PLAY STORE
         targetSdk 36
         versionCode 6
-        versionName "6.6.1" // SESUAIKAN DENGAN VERSI TERAKHIR ANDA
+        versionName "6.6.1 Stable" // SESUAIKAN DENGAN VERSI TERAKHIR ANDA
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 

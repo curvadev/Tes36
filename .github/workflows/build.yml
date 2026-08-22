@@ -61,26 +61,35 @@ jobs:
           echo "8. Menambahkan Aturan Exported ke Manifest (Wajib Android 12+)..."
           sed -i 's/<activity android:name=".MainActivity"/<activity android:name=".MainActivity" android:exported="true"/g' app/src/main/AndroidManifest.xml
 
-      - name: Build APK Release
-        run: ./gradlew assembleRelease
+      - name: Build APK & AAB Release
+        run: |
+          echo "Mencetak APK..."
+          ./gradlew assembleRelease
+          echo "Mencetak AAB..."
+          ./gradlew bundleRelease
 
-      - name: Tandatangani (Sign) dengan Kunci Tetap
+      - name: Tandatangani (Sign) APK & AAB dengan Kunci Tetap
         run: |
           echo "1. Mencari Alat Penandatangan (apksigner)..."
           BUILD_TOOLS_DIR=$(ls -d $ANDROID_SDK_ROOT/build-tools/* | tail -1)
           APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
           
-          echo "2. Mencari file APK mentah..."
+          echo "2. Mencari file mentah APK dan AAB..."
           APK_FILE=$(find app/build/outputs/apk/release -name "*-unsigned.apk" | head -n 1)
+          AAB_FILE=$(find app/build/outputs/bundle/release -name "*-release.aab" | head -n 1)
           
-          echo "3. Menandatangani menggunakan Kunci Master..."
+          echo "3. Menandatangani APK..."
           $APKSIGNER sign --ks KUNCI-RAHASIA.keystore --ks-pass pass:curvapayment123 --key-pass pass:curvapayment123 --ks-key-alias curva_alias "$APK_FILE"
-          
-          echo "4. Mengganti nama file hasil..."
           mv "$APK_FILE" app/build/outputs/apk/release/CurvaPayment-Modern.apk
+          
+          echo "4. Menandatangani AAB (dengan jarsigner)..."
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore KUNCI-RAHASIA.keystore -storepass curvapayment123 -keypass curvapayment123 "$AAB_FILE" curva_alias
+          mv "$AAB_FILE" app/build/outputs/bundle/release/CurvaPayment-Modern.aab
 
-      - name: Download Hasil Akhir
+      - name: Download Hasil Akhir (APK & AAB)
         uses: actions/upload-artifact@v4
         with:
           name: Aplikasi-Final-Siap-Publish
-          path: app/build/outputs/apk/release/CurvaPayment-Modern.apk
+          path: |
+            app/build/outputs/apk/release/CurvaPayment-Modern.apk
+            app/build/outputs/bundle/release/CurvaPayment-Modern.aab

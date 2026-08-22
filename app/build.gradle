@@ -2,19 +2,19 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id 'com.google.gms.google-services' // KITA TAMBAHKAN PLUGIN FIREBASE
 }
 
 android {
-    namespace "com.example.test36"
+    namespace "com.curva.ppob" // 1. UBAH NAMESPACE KE NAMA ASLI APLIKASI
     compileSdk 36
 
     defaultConfig {
-        applicationId "com.example.test36"
-        minSdk 24
+        applicationId "com.curva.ppob" // 2. UBAH APPLICATION ID KE NAMA ASLI APLIKASI
+        minSdk 24 // KITA NAIKKAN KE 24 AGAR SESUAI STANDAR SDK 36 DAN PLAY STORE
         targetSdk 36
-        versionCode 1
-        versionName "1.0"
-
+        versionCode 5
+        versionName "5.6.1" // SESUAIKAN DENGAN VERSI TERAKHIR ANDA
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -37,6 +37,7 @@ android {
 }
 
 dependencies {
+    // BAWAAN JSTUDIO (KITA BIARKAN SAJA AGAR SISTEM TIDAK BENTROK)
     implementation libs.androidx.activity.compose
     implementation platform(libs.androidx.compose.bom)
     implementation libs.androidx.core.ktx
@@ -52,4 +53,18 @@ dependencies {
     androidTestImplementation libs.androidx.ui.test.junit4
     debugImplementation libs.androidx.ui.test.manifest
     debugImplementation libs.androidx.ui.tooling
+
+    // ==========================================
+    // PUSTAKA BAWAAN CURVA PAYMENT LAMA ANDA
+    // ==========================================
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    
+    // FIREBASE KITA NAIKKAN VERSINYA AGAR KOMPATIBEL DENGAN SDK 36
+    implementation platform('com.google.firebase:firebase-bom:33.1.2')
+    implementation 'com.google.firebase:firebase-analytics'
+    implementation 'com.google.firebase:firebase-messaging'
+    // Firebase IID sudah lama dihapus oleh Google, fiturnya sudah gabung di messaging, jadi tidak perlu dimasukkan lagi.
+
+    // ZXING SCANNER KITA NAIKKAN VERSINYA AGAR KOMPATIBEL DENGAN SDK 36
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
 }

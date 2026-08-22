@@ -1,4 +1,4 @@
-name: Build JStudio Modern
+name: Build JStudio Modern Final
 
 on:
   push:
@@ -22,11 +22,28 @@ jobs:
       - name: Izin Eksekusi Gradle Wrapper
         run: chmod +x gradlew
 
+      - name: Robot Penambal Kode Java (Migrasi Otomatis)
+        run: |
+          echo "1. Mengubah Android Support lama menjadi AndroidX..."
+          find app/src/main/java -name "*.java" -exec sed -i 's/android.support.v4.content.FileProvider/androidx.core.content.FileProvider/g' {} +
+          find app/src/main/java -name "*.java" -exec sed -i 's/android.support.v4.app.NotificationCompat/androidx.core.app.NotificationCompat/g' {} +
+          find app/src/main/java -name "*.java" -exec sed -i 's/android.support.v4.app.ActivityCompat/androidx.core.app.ActivityCompat/g' {} +
+          find app/src/main/java -name "*.java" -exec sed -i 's/android.support.v4.content.ContextCompat/androidx.core.content.ContextCompat/g' {} +
+          find app/src/main/java -name "*.java" -exec sed -i 's/android.support.annotation.NonNull/androidx.annotation.NonNull/g' {} +
+          
+          echo "2. Mematikan kode WebView yang sudah dihapus Google..."
+          find app/src/main/java -name "*.java" -exec sed -i 's/.*setAppCacheEnabled.*/\/\/ &/' {} +
+          find app/src/main/java -name "*.java" -exec sed -i 's/.*setAppCachePath.*/\/\/ &/' {} +
+          
+          echo "3. Memperbaiki kode Firebase yang usang..."
+          find app/src/main/java -name "*.java" -exec sed -i 's/FirebaseInstanceId.getInstance().getToken()/FirebaseMessaging.getInstance().getToken().toString()/g' {} +
+          find app/src/main/java -name "*.java" -exec sed -i 's/import com.google.firebase.iid.FirebaseInstanceId;/\/\/ import com.google.firebase.iid.FirebaseInstanceId;/g' {} +
+
       - name: Build APK Release
         run: ./gradlew assembleRelease
 
       - name: Download Hasil Akhir
         uses: actions/upload-artifact@v4
         with:
-          name: Tes-JStudio-APK
+          name: Aplikasi-Final-Siap-Publish
           path: app/build/outputs/apk/release/*.apk

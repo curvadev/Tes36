@@ -72,39 +72,30 @@ jobs:
       - name: 1. Menerapkan Konfigurasi dari Web Admin
         run: |
           echo "Memproses Parameter Dinamis..."
-          
           if [ -n "${{ github.event.inputs.app_name }}" ]; then
             sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">${{ github.event.inputs.app_name }}<\/string>/g" app/src/main/res/values/strings.xml
           fi
-          
           if [ -n "${{ github.event.inputs.package_name }}" ]; then
             sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/g" app/build.gradle
           fi
-          
           if [ -n "${{ github.event.inputs.version_name }}" ]; then
             sed -i "s/versionName \".*\"/versionName \"${{ github.event.inputs.version_name }}\"/g" app/build.gradle
           fi
-          
           if [ -n "${{ github.event.inputs.version_code }}" ]; then
             sed -i "s/versionCode .*/versionCode ${{ github.event.inputs.version_code }}/g" app/build.gradle
           fi
-          
           if [ -n "${{ github.event.inputs.min_sdk }}" ]; then
             sed -i "s/minSdk .*/minSdk ${{ github.event.inputs.min_sdk }}/g" app/build.gradle
           fi
-          
           if [ -n "${{ github.event.inputs.target_sdk }}" ]; then
             sed -i "s/targetSdk .*/targetSdk ${{ github.event.inputs.target_sdk }}/g" app/build.gradle
           fi
-          
           if [ -n "${{ github.event.inputs.google_services_url }}" ]; then
             wget -O app/google-services.json "${{ github.event.inputs.google_services_url }}"
           fi
-          
           if [ -n "${{ github.event.inputs.logo_url }}" ]; then
             wget -O app/src/main/res/drawable/ic_launcher.png "${{ github.event.inputs.logo_url }}"
           fi
-          
           if [ -n "${{ github.event.inputs.splash_url }}" ]; then
             wget -O app/src/main/res/drawable/splash_logo.png "${{ github.event.inputs.splash_url }}"
           fi
@@ -138,12 +129,23 @@ jobs:
           
           sed -i 's/<activity android:name=".MainActivity"/<activity android:name=".MainActivity" android:exported="true"/g' app/src/main/AndroidManifest.xml
 
-      - name: 3. Build Aplikasi
+      - name: 3. Build Aplikasi (Isolasi Tugas & Injeksi Memori)
         run: |
-          BUILD_CMD="./gradlew clean"
-          if [ "${{ github.event.inputs.build_type }}" == "apk" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then BUILD_CMD="$BUILD_CMD assembleRelease"; fi
-          if [ "${{ github.event.inputs.build_type }}" == "aab" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then BUILD_CMD="$BUILD_CMD bundleRelease"; fi
-          eval $BUILD_CMD
+          echo "Menyuntikkan Memori Tambahan ke Mesin..."
+          echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g" >> gradle.properties
+          
+          echo "Membersihkan Cache..."
+          ./gradlew clean --no-daemon
+          
+          if [ "${{ github.event.inputs.build_type }}" == "apk" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then 
+            echo "Mencetak APK..."
+            ./gradlew assembleRelease --no-daemon --max-workers=2
+          fi
+          
+          if [ "${{ github.event.inputs.build_type }}" == "aab" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then 
+            echo "Mencetak AAB..."
+            ./gradlew bundleRelease --no-daemon --max-workers=2
+          fi
 
       - name: 4. Tandatangani Aplikasi
         run: |
@@ -173,9 +175,13 @@ jobs:
       - name: 6. Kirim Hasil ke Server Admin Web
         if: github.event.inputs.server_upload_url != ''
         run: |
+          echo "Mengirim file ke server web admin..."
           if [ "${{ github.event.inputs.build_type }}" == "apk" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then
+            echo "Mengirim APK..."
             curl -F "file=@app/build/outputs/apk/release/CurvaPayment-Final.apk" -F "token=RAHASIA_UPLOAD_123" "${{ github.event.inputs.server_upload_url }}"
           fi
+          
           if [ "${{ github.event.inputs.build_type }}" == "aab" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then
+            echo "Mengirim AAB..."
             curl -F "file=@app/build/outputs/bundle/release/CurvaPayment-Final.aab" -F "token=RAHASIA_UPLOAD_123" "${{ github.event.inputs.server_upload_url }}"
           fi

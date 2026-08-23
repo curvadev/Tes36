@@ -5,33 +5,50 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
     inputs:
+      app_name:
+        description: 'Nama Aplikasi'
+        required: false
+        default: ''
+      package_name:
+        description: 'Package Name / App ID'
+        required: false
+        default: ''
       version_name:
-        description: 'Versi Aplikasi Baru (Biarkan kosong jika tidak berubah)'
+        description: 'Versi Aplikasi Baru'
         required: false
         default: ''
       version_code:
-        description: 'Kode Versi Baru (Angka, Biarkan kosong jika tidak berubah)'
+        description: 'Kode Versi Baru'
+        required: false
+        default: ''
+      min_sdk:
+        description: 'Min SDK'
+        required: false
+        default: ''
+      target_sdk:
+        description: 'Target SDK'
         required: false
         default: ''
       logo_url:
-        description: 'URL Gambar Logo Baru (Biarkan kosong jika tidak berubah)'
+        description: 'URL Gambar Logo Baru'
         required: false
         default: ''
       splash_url:
-        description: 'URL Gambar Splash Baru (Biarkan kosong jika tidak berubah)'
+        description: 'URL Gambar Splash Baru'
+        required: false
+        default: ''
+      google_services_url:
+        description: 'URL google-services.json'
         required: false
         default: ''
       build_type:
-        description: 'Tipe File yang Dicetak'
+        description: 'Tipe File'
         required: true
         default: 'both'
         type: choice
-        options:
-          - both
-          - apk
-          - aab
+        options: [both, apk, aab]
       server_upload_url:
-        description: 'URL API Web Anda untuk menerima APK (Opsional)'
+        description: 'URL API Web Penerima'
         required: false
         default: ''
 
@@ -49,60 +66,67 @@ jobs:
           java-version: '17' 
           distribution: 'temurin'
 
-      - name: Izin Eksekusi Gradle Wrapper
+      - name: Izin Eksekusi Gradle
         run: chmod +x gradlew
 
-      - name: 1. Menerapkan Perintah dari Web Admin
+      - name: 1. Menerapkan Konfigurasi dari Web Admin
         run: |
-          echo "Memeriksa perintah dari Web Admin..."
+          echo "Memproses Parameter Dinamis..."
+          
+          if [ -n "${{ github.event.inputs.app_name }}" ]; then
+            sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">${{ github.event.inputs.app_name }}<\/string>/g" app/src/main/res/values/strings.xml
+          fi
+          
+          if [ -n "${{ github.event.inputs.package_name }}" ]; then
+            sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/g" app/build.gradle
+          fi
           
           if [ -n "${{ github.event.inputs.version_name }}" ]; then
-            echo "Mengubah versionName menjadi ${{ github.event.inputs.version_name }}..."
             sed -i "s/versionName \".*\"/versionName \"${{ github.event.inputs.version_name }}\"/g" app/build.gradle
           fi
           
           if [ -n "${{ github.event.inputs.version_code }}" ]; then
-            echo "Mengubah versionCode menjadi ${{ github.event.inputs.version_code }}..."
             sed -i "s/versionCode .*/versionCode ${{ github.event.inputs.version_code }}/g" app/build.gradle
           fi
           
+          if [ -n "${{ github.event.inputs.min_sdk }}" ]; then
+            sed -i "s/minSdk .*/minSdk ${{ github.event.inputs.min_sdk }}/g" app/build.gradle
+          fi
+          
+          if [ -n "${{ github.event.inputs.target_sdk }}" ]; then
+            sed -i "s/targetSdk .*/targetSdk ${{ github.event.inputs.target_sdk }}/g" app/build.gradle
+          fi
+          
+          if [ -n "${{ github.event.inputs.google_services_url }}" ]; then
+            wget -O app/google-services.json "${{ github.event.inputs.google_services_url }}"
+          fi
+          
           if [ -n "${{ github.event.inputs.logo_url }}" ]; then
-            echo "Mengunduh dan menimpa Logo (ic_launcher.png)..."
             wget -O app/src/main/res/drawable/ic_launcher.png "${{ github.event.inputs.logo_url }}"
           fi
           
           if [ -n "${{ github.event.inputs.splash_url }}" ]; then
-            echo "Mengunduh dan menimpa Splash Screen (splash_logo.png)..."
             wget -O app/src/main/res/drawable/splash_logo.png "${{ github.event.inputs.splash_url }}"
           fi
 
       - name: 2. Robot Penambal Kode (Java, XML, Manifest)
         run: |
-          echo "Mengubah Android Support lama menjadi AndroidX di JAVA..."
           find app/src/main/java -name "*.java" -exec sed -i 's/android.support.v4.content.FileProvider/androidx.core.content.FileProvider/g' {} +
           find app/src/main/java -name "*.java" -exec sed -i 's/android.support.v4.app.NotificationCompat/androidx.core.app.NotificationCompat/g' {} +
           find app/src/main/java -name "*.java" -exec sed -i 's/android.support.v4.app.ActivityCompat/androidx.core.app.ActivityCompat/g' {} +
           find app/src/main/java -name "*.java" -exec sed -i 's/android.support.v4.content.ContextCompat/androidx.core.content.ContextCompat/g' {} +
           find app/src/main/java -name "*.java" -exec sed -i 's/android.support.annotation.NonNull/androidx.annotation.NonNull/g' {} +
           
-          echo "Mematikan kode WebView yang sudah dihapus Google..."
           find app/src/main/java -name "*.java" -exec sed -i 's/.*setAppCacheEnabled.*/\/\/ &/' {} +
           find app/src/main/java -name "*.java" -exec sed -i 's/.*setAppCachePath.*/\/\/ &/' {} +
           
-          echo "Membersihkan sisa import usang Firebase..."
           find app/src/main/java -name "*.java" -exec sed -i 's/import com.google.firebase.iid.FirebaseInstanceId;/\/\/ import com.google.firebase.iid.FirebaseInstanceId;/g' {} +
-          
-          echo "Menambahkan Import FirebaseMessaging..."
           find app/src/main/java -name "MainActivity.java" -exec sed -i '/import android.os.Bundle;/a import com.google.firebase.messaging.FirebaseMessaging;' {} +
-          
-          echo "Memperbaiki Ikon Notifikasi (bigLargeIcon)..."
           find app/src/main/java -name "MyFirebaseMessagingService.java" -exec sed -i 's/.bigLargeIcon(null)/.bigLargeIcon((android.graphics.Bitmap) null)/g' {} +
 
-          echo "Memperbaiki Manifest (FileProvider & Peringatan)..."
           sed -i 's/package="com.curva.ppob"//g' app/src/main/AndroidManifest.xml
           sed -i 's/android.support.v4.content.FileProvider/androidx.core.content.FileProvider/g' app/src/main/AndroidManifest.xml
           
-          echo "Memperbaiki Layout XML & PendingIntent..."
           find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.v4.widget.SwipeRefreshLayout/androidx.swiperefreshlayout.widget.SwipeRefreshLayout/g' {} +
           find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.v4.widget.DrawerLayout/androidx.drawerlayout.widget.DrawerLayout/g' {} +
           find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.design.widget.NavigationView/com.google.android.material.navigation.NavigationView/g' {} +
@@ -112,23 +136,13 @@ jobs:
           find app/src/main/java -name "*.java" -exec sed -i 's/PendingIntent.FLAG_ONE_SHOT/PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE/g' {} +
           find app/src/main/java -name "*.java" -exec sed -i 's/PendingIntent.FLAG_UPDATE_CURRENT/PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE/g' {} +
           
-          echo "Menambahkan Aturan Exported ke Manifest (Wajib Android 12+)..."
           sed -i 's/<activity android:name=".MainActivity"/<activity android:name=".MainActivity" android:exported="true"/g' app/src/main/AndroidManifest.xml
 
-      - name: 3. Build Aplikasi (Sesuai Pilihan Web)
+      - name: 3. Build Aplikasi
         run: |
-          echo "Membersihkan Cache Mesin..."
           BUILD_CMD="./gradlew clean"
-          
-          if [ "${{ github.event.inputs.build_type }}" == "apk" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then
-            BUILD_CMD="$BUILD_CMD assembleRelease"
-          fi
-          
-          if [ "${{ github.event.inputs.build_type }}" == "aab" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then
-            BUILD_CMD="$BUILD_CMD bundleRelease"
-          fi
-          
-          echo "Menjalankan Perintah: $BUILD_CMD"
+          if [ "${{ github.event.inputs.build_type }}" == "apk" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then BUILD_CMD="$BUILD_CMD assembleRelease"; fi
+          if [ "${{ github.event.inputs.build_type }}" == "aab" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then BUILD_CMD="$BUILD_CMD bundleRelease"; fi
           eval $BUILD_CMD
 
       - name: 4. Tandatangani Aplikasi
@@ -159,15 +173,9 @@ jobs:
       - name: 6. Kirim Hasil ke Server Admin Web
         if: github.event.inputs.server_upload_url != ''
         run: |
-          echo "Mengirim file ke server web admin..."
-          
           if [ "${{ github.event.inputs.build_type }}" == "apk" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then
-            echo "Mengirim APK..."
             curl -F "file=@app/build/outputs/apk/release/CurvaPayment-Final.apk" -F "token=RAHASIA_UPLOAD_123" "${{ github.event.inputs.server_upload_url }}"
           fi
-          
           if [ "${{ github.event.inputs.build_type }}" == "aab" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then
-            echo "Mengirim AAB..."
             curl -F "file=@app/build/outputs/bundle/release/CurvaPayment-Final.aab" -F "token=RAHASIA_UPLOAD_123" "${{ github.event.inputs.server_upload_url }}"
           fi
-

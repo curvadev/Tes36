@@ -132,6 +132,7 @@ jobs:
       - name: 3. Build Aplikasi (Isolasi Tugas & Injeksi Memori)
         run: |
           echo "Menyuntikkan Memori Tambahan ke Mesin..."
+          echo "" >> gradle.properties
           echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g" >> gradle.properties
           
           echo "Membersihkan Cache..."

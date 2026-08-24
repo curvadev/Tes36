@@ -84,16 +84,20 @@ jobs:
 
       - name: 2. Robot Upgrade Ke Google Code Scanner (Python)
         run: |
-          python3 -c '
+          cat << 'EOF' > upgrade_scanner.py
           import re
+          
           # Suntik library ke Gradle
-          with open("app/build.gradle", "r") as f: gradle = f.read()
+          with open("app/build.gradle", "r") as f: 
+              gradle = f.read()
           if "play-services-code-scanner" not in gradle:
               gradle = gradle.replace("dependencies {", "dependencies {\n    implementation \"com.google.android.gms:play-services-code-scanner:16.1.0\"\n")
-              with open("app/build.gradle", "w") as f: f.write(gradle)
+              with open("app/build.gradle", "w") as f: 
+                  f.write(gradle)
           
           # Bedah file Java dan ganti fungsi Scanner jadul
-          with open("app/src/main/java/com/curva/ppob/MainActivity.java", "r") as f: java = f.read()
+          with open("app/src/main/java/com/curva/ppob/MainActivity.java", "r") as f: 
+              java = f.read()
           
           old_func = r"private void scanBarcode\(\)\s*\{.*?(?=private void openContactPicker\(\))"
           new_func = """private void scanBarcode() {
@@ -103,19 +107,25 @@ jobs:
                       @Override
                       public void onSuccess(com.google.mlkit.vision.barcode.common.Barcode barcode) {
                           final String res = barcode.getRawValue();
-                          if (res != null) webView.post(new Runnable() { public void run() { webView.evaluateJavascript("javascript:onBarcodeScanned(\'" + res + "\')", null); } });
+                          if (res != null) {
+                              webView.post(new Runnable() { 
+                                  public void run() { webView.evaluateJavascript("javascript:onBarcodeScanned('" + res + "')", null); } 
+                              });
+                          }
                       }
                   }).addOnFailureListener(new com.google.android.gms.tasks.OnFailureListener() {
                       @Override
-                      public void onFailure(Exception e) { showToast("Scan gagal atau dibatalkan"); }
+                      public void onFailure(Exception e) { showToast("Scan gagal/dibatalkan"); }
                   });
           }
           
           """
           
           java = re.sub(old_func, new_func, java, flags=re.DOTALL)
-          with open("app/src/main/java/com/curva/ppob/MainActivity.java", "w") as f: f.write(java)
-          '
+          with open("app/src/main/java/com/curva/ppob/MainActivity.java", "w") as f: 
+              f.write(java)
+          EOF
+          python3 upgrade_scanner.py
 
       - name: 3. Robot Penambal Kode AndroidX (Java, XML, Manifest)
         run: |

@@ -582,47 +582,84 @@ public class MainActivity extends Activity {
     }
 
     // ============================================
-    // SETUP WEBVIEW DAN LAINNYA
+    // FUNGSI HELPER (Wajib Ada di Paling Bawah)
     // ============================================
+    public void showToast(final String message) { 
+        runOnUiThread(new Runnable() { 
+            @Override public void run() { Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show(); } 
+        }); 
+    }
+
+    private void setStatusBarColor(String color) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) { 
+            Window window = getWindow(); 
+            window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS); 
+            window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS); 
+            window.setStatusBarColor(Color.parseColor(color)); 
+            window.getDecorView().setSystemUiVisibility(0); 
+        }
+    }
+
+    private boolean isNetworkAvailable() {
+        ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (connectivityManager != null) { 
+            NetworkInfo activeNetworkInfo = connectivityManager.getActiveNetworkInfo(); 
+            return activeNetworkInfo != null && activeNetworkInfo.isConnected(); 
+        } 
+        return false;
+    }
+
     private void setupWebView() {
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setDatabaseEnabled(true);
-        settings.setAllowFileAccess(true);
-        settings.setAllowContentAccess(true);
-        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        settings.setAppCacheEnabled(true);
-        settings.setAppCachePath(getApplicationContext().getCacheDir().getAbsolutePath());
-        settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
-        settings.setLoadsImagesAutomatically(true);
+        WebSettings settings = webView.getSettings(); 
+        settings.setJavaScriptEnabled(true); 
+        settings.setDomStorageEnabled(true); 
+        settings.setDatabaseEnabled(true); 
+        settings.setAllowFileAccess(true); 
+        settings.setAllowContentAccess(true); 
+        webView.setOverScrollMode(View.OVER_SCROLL_NEVER); 
+        settings.setAppCacheEnabled(true); 
+        settings.setAppCachePath(getApplicationContext().getCacheDir().getAbsolutePath()); 
+        settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK); 
+        settings.setLoadsImagesAutomatically(true); 
         settings.setBlockNetworkImage(false);
 
-        String defaultAgent = settings.getUserAgentString();
+        String defaultAgent = settings.getUserAgentString(); 
         settings.setUserAgentString(defaultAgent + " CurvaApp");
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) { 
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW); 
         }
 
         webView.setWebChromeClient(new WebChromeClient() {
                 @Override
                 public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
-                    if (MainActivity.this.filePathCallback != null) { MainActivity.this.filePathCallback.onReceiveValue(null); } MainActivity.this.filePathCallback = filePathCallback; String[] acceptTypes = fileChooserParams.getAcceptTypes(); Intent intent; String chooserTitle;
-                    if (acceptTypes != null && acceptTypes.length > 0 && acceptTypes[0].contains("image")) { intent = new Intent(Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI); intent.setType("image/*"); chooserTitle = "Pilih Aplikasi Foto"; } else { intent = new Intent(Intent.ACTION_GET_CONTENT); intent.addCategory(Intent.CATEGORY_OPENABLE); intent.setType("*/*"); chooserTitle = "Pilih Aplikasi File Manager"; }
+                    if (MainActivity.this.filePathCallback != null) { MainActivity.this.filePathCallback.onReceiveValue(null); } 
+                    MainActivity.this.filePathCallback = filePathCallback; 
+                    String[] acceptTypes = fileChooserParams.getAcceptTypes(); 
+                    Intent intent; String chooserTitle;
+                    if (acceptTypes != null && acceptTypes.length > 0 && acceptTypes[0].contains("image")) { 
+                        intent = new Intent(Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI); 
+                        intent.setType("image/*"); chooserTitle = "Pilih Aplikasi Foto"; 
+                    } else { 
+                        intent = new Intent(Intent.ACTION_GET_CONTENT); intent.addCategory(Intent.CATEGORY_OPENABLE); 
+                        intent.setType("*/*"); chooserTitle = "Pilih Aplikasi File Manager"; 
+                    }
                     Intent chooserIntent = Intent.createChooser(intent, chooserTitle);
-                    try { startActivityForResult(chooserIntent, FILE_CHOOSER_REQUEST); return true; } catch (ActivityNotFoundException e) { MainActivity.this.filePathCallback = null; return false; }
+                    try { startActivityForResult(chooserIntent, FILE_CHOOSER_REQUEST); return true; } 
+                    catch (ActivityNotFoundException e) { MainActivity.this.filePathCallback = null; return false; }
                 }
 
                 @Override
                 public boolean onJsPrompt(WebView view, String url, String message, String defaultValue, JsPromptResult result) {
-                    if (MainActivity.this.handleAndroidBridge(message, defaultValue, result)) { return true; } return super.onJsPrompt(view, url, message, defaultValue, result);
+                    if (MainActivity.this.handleAndroidBridge(message, defaultValue, result)) { return true; } 
+                    return super.onJsPrompt(view, url, message, defaultValue, result);
                 }
             });
     }
 
     private void openAppNative(String url) {
-        try { Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url)); startActivity(intent); } catch (Exception e) {
+        try { Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url)); startActivity(intent); } 
+        catch (Exception e) {
             try {
                 if (url.startsWith("whatsapp://")) { String fallbackUrl = url.replace("whatsapp://send?phone=", "https://wa.me/"); startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(fallbackUrl))); } 
                 else if (url.startsWith("tg://")) { String fallbackUrl = url.replace("tg://resolve?domain=", "https://t.me/"); startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(fallbackUrl))); } 
@@ -631,8 +668,10 @@ public class MainActivity extends Activity {
     }
 
     private void scanBarcode() {
-        try { Intent intent = new Intent(this, CaptureActivity.class); intent.putExtra("SCAN_MODE", "QR_CODE_MODE,PRODUCT_MODE"); intent.putExtra("ORIENTATION_LOCK", true); startActivityForResult(intent, BARCODE_SCAN_REQUEST); } catch (Exception e) {
-            try { Intent intent = new Intent("com.google.zxing.client.android.SCAN"); intent.putExtra("SCAN_MODE", "QR_CODE_MODE,PRODUCT_MODE"); startActivityForResult(intent, BARCODE_SCAN_REQUEST); } catch (Exception ex) { }
+        try { Intent intent = new Intent(this, CaptureActivity.class); intent.putExtra("SCAN_MODE", "QR_CODE_MODE,PRODUCT_MODE"); intent.putExtra("ORIENTATION_LOCK", true); startActivityForResult(intent, BARCODE_SCAN_REQUEST); } 
+        catch (Exception e) {
+            try { Intent intent = new Intent("com.google.zxing.client.android.SCAN"); intent.putExtra("SCAN_MODE", "QR_CODE_MODE,PRODUCT_MODE"); startActivityForResult(intent, BARCODE_SCAN_REQUEST); } 
+            catch (Exception ex) { }
         }
     }
 

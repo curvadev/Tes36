@@ -98,19 +98,15 @@ public class MainActivity extends Activity {
 
         FrameLayout root = new FrameLayout(this);
         webView = new WebView(this);
-        root.addView(webView, new FrameLayout.LayoutParams(
-                         FrameLayout.LayoutParams.MATCH_PARENT, 
-                         FrameLayout.LayoutParams.MATCH_PARENT));
+        root.addView(webView, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
         splash = new RelativeLayout(this);
         splash.setBackgroundColor(Color.parseColor("#f5f5f5"));
-        splash.setClickable(true); 
-        splash.setFocusable(true);
+        splash.setClickable(true); splash.setFocusable(true);
 
         LinearLayout centerWrap = new LinearLayout(this);
         centerWrap.setOrientation(LinearLayout.VERTICAL);
         centerWrap.setGravity(Gravity.CENTER);
-
         RelativeLayout.LayoutParams centerParams = new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.WRAP_CONTENT, RelativeLayout.LayoutParams.WRAP_CONTENT);
         centerParams.addRule(RelativeLayout.CENTER_IN_PARENT);
         centerParams.bottomMargin = (int) (80 * getResources().getDisplayMetrics().density); 
@@ -127,19 +123,13 @@ public class MainActivity extends Activity {
         centerWrap.addView(logo, logoParams);
 
         String appVersion = "1.0.0";
-        try {
-            PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
-            appVersion = pInfo.versionName; 
-        } catch (PackageManager.NameNotFoundException e) { e.printStackTrace(); }
+        try { PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0); appVersion = pInfo.versionName; } catch (PackageManager.NameNotFoundException e) { e.printStackTrace(); }
 
         TextView version = new TextView(this);
-        version.setText("Version " + appVersion);
-        version.setTextColor(Color.GRAY);
-        version.setTextSize(12);
+        version.setText("Version " + appVersion); version.setTextColor(Color.GRAY); version.setTextSize(12);
 
         RelativeLayout.LayoutParams versionParams = new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.WRAP_CONTENT, RelativeLayout.LayoutParams.WRAP_CONTENT);
-        versionParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-        versionParams.addRule(RelativeLayout.CENTER_HORIZONTAL);
+        versionParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM); versionParams.addRule(RelativeLayout.CENTER_HORIZONTAL);
         versionParams.bottomMargin = (int) (40 * getResources().getDisplayMetrics().density);
         splash.addView(version, versionParams);
 
@@ -151,86 +141,46 @@ public class MainActivity extends Activity {
         loadFcmToken(); 
 
         webView.setWebViewClient(new WebViewClient() {
-                @Override
-                public void onPageFinished(WebView view, String url) { saveCookies(); injectAndroidBridge(); sendFcmTokenToWeb(); }
-
-                @SuppressWarnings("deprecation")
-                @Override
-                public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                    if (isMaintenanceTime()) { showMaintenanceScreen(view); } else { showOfflineScreen(view); }
-                }
-
-                @TargetApi(Build.VERSION_CODES.M)
-                @Override
-                public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                    if (request.isForMainFrame()) { if (isMaintenanceTime()) showMaintenanceScreen(view); else showOfflineScreen(view); }
-                }
-
-                @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-                @Override
-                public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
-                    if (request.isForMainFrame()) { if (errorResponse.getStatusCode() >= 500) { if (isMaintenanceTime()) showMaintenanceScreen(view); else showOfflineScreen(view); } }
-                }
+                @Override public void onPageFinished(WebView view, String url) { saveCookies(); injectAndroidBridge(); sendFcmTokenToWeb(); }
+                @SuppressWarnings("deprecation") @Override public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) { if (isMaintenanceTime()) { showMaintenanceScreen(view); } else { showOfflineScreen(view); } }
+                @TargetApi(Build.VERSION_CODES.M) @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) { if (request.isForMainFrame()) { if (isMaintenanceTime()) showMaintenanceScreen(view); else showOfflineScreen(view); } }
+                @TargetApi(Build.VERSION_CODES.LOLLIPOP) @Override public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) { if (request.isForMainFrame()) { if (errorResponse.getStatusCode() >= 500) { if (isMaintenanceTime()) showMaintenanceScreen(view); else showOfflineScreen(view); } } }
             });
 
         String initialUrl = handleDeepLink(getIntent());
-
         if (isMaintenanceTime()) { showMaintenanceScreen(webView); } else if (isNetworkAvailable()) { webView.loadUrl(initialUrl); } else { showOfflineScreen(webView); }
 
-        splashHandler.postDelayed(new Runnable() {
-                @Override
-                public void run() { triggerNativeAppLock(); }
-            }, 2500);
+        splashHandler.postDelayed(new Runnable() { @Override public void run() { triggerNativeAppLock(); } }, 2500);
     }
 
     private void triggerNativeAppLock() {
         if (isAppUnlocked) return; 
-
         boolean isLockEnabled = getSharedPreferences("CurvaPrefs", MODE_PRIVATE).getBoolean("is_app_lock_enabled", false);
-
-        if (!isLockEnabled) {
-            unlockAppAndHideSplash(); 
-            return;
-        }
+        if (!isLockEnabled) { unlockAppAndHideSplash(); return; }
 
         android.app.KeyguardManager keyguardManager = (android.app.KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             if (keyguardManager != null && keyguardManager.isKeyguardSecure()) {
                 Intent intent = keyguardManager.createConfirmDeviceCredentialIntent("Keamanan Curva Payment", "Gunakan Sidik Jari, PIN, atau Pola Layar Anda untuk masuk.");
-                if (intent != null) {
-                    startActivityForResult(intent, REQUEST_APP_LOCK);
-                    return; 
-                }
+                if (intent != null) { startActivityForResult(intent, REQUEST_APP_LOCK); return; }
             }
         }
         unlockAppAndHideSplash();
     }
 
     private void unlockAppAndHideSplash() {
-        isAppUnlocked = true;
-        splash.animate().alpha(0f).setDuration(450);
+        isAppUnlocked = true; splash.animate().alpha(0f).setDuration(450);
         delayHandler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    setStatusBarColor("#1791f4");
-                    splash.setVisibility(View.GONE);
-                    checkNotificationPermission();
-                    checkForAppUpdate();
-                }
+                @Override public void run() { setStatusBarColor("#1791f4"); splash.setVisibility(View.GONE); checkNotificationPermission(); checkForAppUpdate(); }
             }, 500); 
     }
 
     private void checkNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             android.app.NotificationManager notificationManager = (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            if (notificationManager != null) {
-                android.app.NotificationChannel channel = new android.app.NotificationChannel("curva_payment_notif", "Transaksi & Deposit", android.app.NotificationManager.IMPORTANCE_HIGH);
-                notificationManager.createNotificationChannel(channel);
-            }
+            if (notificationManager != null) { android.app.NotificationChannel channel = new android.app.NotificationChannel("curva_payment_notif", "Transaksi & Deposit", android.app.NotificationManager.IMPORTANCE_HIGH); notificationManager.createNotificationChannel(channel); }
         }
-        if (Build.VERSION.SDK_INT >= 33) { 
-            if (checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) { requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, REQUEST_NOTIFICATION_PERMISSION); }
-        }
+        if (Build.VERSION.SDK_INT >= 33) { if (checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) { requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, REQUEST_NOTIFICATION_PERMISSION); } }
     }
 
     private boolean isVersionOlder(String currentVersion, String serverVersion) {
@@ -238,8 +188,7 @@ public class MainActivity extends Activity {
         String[] currentParts = currentVersion.split("\\."); String[] serverParts = serverVersion.split("\\.");
         int length = Math.max(currentParts.length, serverParts.length);
         for (int i = 0; i < length; i++) {
-            int currentPart = i < currentParts.length ? Integer.parseInt(currentParts[i]) : 0;
-            int serverPart = i < serverParts.length ? Integer.parseInt(serverParts[i]) : 0;
+            int currentPart = i < currentParts.length ? Integer.parseInt(currentParts[i]) : 0; int serverPart = i < serverParts.length ? Integer.parseInt(serverParts[i]) : 0;
             if (currentPart < serverPart) { return true; } if (currentPart > serverPart) { return false; }
         }
         return false; 
@@ -247,8 +196,7 @@ public class MainActivity extends Activity {
 
     private void checkForAppUpdate() {
         new Thread(new Runnable() {
-				@Override
-				public void run() {
+				@Override public void run() {
 					try {
 						String bypassCacheUrl = BASE_URL + "api/check_version.php?timestamp=" + System.currentTimeMillis();
 						URL url = new URL(bypassCacheUrl); HttpURLConnection conn = (HttpURLConnection) url.openConnection(); conn.setRequestMethod("GET");
@@ -259,16 +207,10 @@ public class MainActivity extends Activity {
 							while ((line = reader.readLine()) != null) { response.append(line); } reader.close();
 							JSONObject json = new JSONObject(response.toString());
 							if (json.getBoolean("success")) {
-								String serverVersion = "1.0.0";
-								if (json.has("latest_version_name")) { serverVersion = json.getString("latest_version_name"); }
+								String serverVersion = "1.0.0"; if (json.has("latest_version_name")) { serverVersion = json.getString("latest_version_name"); }
 								final String finalServerVersion = serverVersion; final boolean forceUpdate = json.getBoolean("force_update"); final String updateUrl = json.getString("update_url"); final String releaseNotes = json.getString("release_notes");
 								PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0); final String currentVersion = pInfo.versionName; 
-								runOnUiThread(new Runnable() {
-										@Override
-										public void run() {
-											if (isVersionOlder(currentVersion, finalServerVersion)) { if (!isFinishing()) { showUpdateDialog(forceUpdate, updateUrl, releaseNotes); } }
-										}
-									});
+								runOnUiThread(new Runnable() { @Override public void run() { if (isVersionOlder(currentVersion, finalServerVersion)) { if (!isFinishing()) { showUpdateDialog(forceUpdate, updateUrl, releaseNotes); } } } });
 							}
 						}
 					} catch (final Exception e) { e.printStackTrace(); }
@@ -277,37 +219,25 @@ public class MainActivity extends Activity {
     }
 
     private void showUpdateDialog(final boolean isForced, final String url, String notes) {
-        final android.app.Dialog dialog = new android.app.Dialog(MainActivity.this);
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE); dialog.setCancelable(!isForced);
+        final android.app.Dialog dialog = new android.app.Dialog(MainActivity.this); dialog.requestWindowFeature(Window.FEATURE_NO_TITLE); dialog.setCancelable(!isForced);
         if (dialog.getWindow() != null) { dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)); }
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
-        int dp20 = (int) (20 * getResources().getDisplayMetrics().density); int dp24 = (int) (24 * getResources().getDisplayMetrics().density);
-        root.setPadding(dp24, dp24, dp24, dp24);
-        android.graphics.drawable.GradientDrawable bgShape = new android.graphics.drawable.GradientDrawable();
-        bgShape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE); bgShape.setCornerRadius(dp20); bgShape.setColor(Color.WHITE); root.setBackground(bgShape);
+        int dp20 = (int) (20 * getResources().getDisplayMetrics().density); int dp24 = (int) (24 * getResources().getDisplayMetrics().density); root.setPadding(dp24, dp24, dp24, dp24);
+        android.graphics.drawable.GradientDrawable bgShape = new android.graphics.drawable.GradientDrawable(); bgShape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE); bgShape.setCornerRadius(dp20); bgShape.setColor(Color.WHITE); root.setBackground(bgShape);
         TextView title = new TextView(this); title.setText("Pembaruan Tersedia \uD83D\uDE80"); title.setTextSize(22); title.setTextColor(Color.parseColor("#1e293b")); title.setTypeface(null, android.graphics.Typeface.BOLD); title.setGravity(Gravity.CENTER); root.addView(title);
         TextView message = new TextView(this); message.setText(notes); message.setTextSize(15); message.setTextColor(Color.parseColor("#64748b")); message.setGravity(Gravity.LEFT); message.setLineSpacing(0, 1.2f);
-        LinearLayout.LayoutParams msgParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        msgParams.setMargins(0, dp20, 0, dp24); root.addView(message, msgParams);
+        LinearLayout.LayoutParams msgParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT); msgParams.setMargins(0, dp20, 0, dp24); root.addView(message, msgParams);
         TextView btnUpdate = new TextView(this); btnUpdate.setText("Perbarui Sekarang"); btnUpdate.setTextColor(Color.WHITE); btnUpdate.setTextSize(16); btnUpdate.setTypeface(null, android.graphics.Typeface.BOLD); btnUpdate.setGravity(Gravity.CENTER);
         int btnPadding = (int)(14 * getResources().getDisplayMetrics().density); btnUpdate.setPadding(0, btnPadding, 0, btnPadding);
         android.graphics.drawable.GradientDrawable btnShape = new android.graphics.drawable.GradientDrawable(); btnShape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE); btnShape.setCornerRadius(dp20); btnShape.setColor(Color.parseColor("#1791f4")); btnUpdate.setBackground(btnShape);
-        btnUpdate.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) { dialog.dismiss(); webView.loadUrl("https://curva.web.id/download.php"); }
-			});
+        btnUpdate.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { dialog.dismiss(); webView.loadUrl("https://curva.web.id/download.php"); } });
         root.addView(btnUpdate);
         if (!isForced) {
             TextView btnLater = new TextView(this); btnLater.setText("Nanti Saja"); btnLater.setTextColor(Color.parseColor("#94a3b8")); btnLater.setTextSize(15); btnLater.setTypeface(null, android.graphics.Typeface.BOLD); btnLater.setGravity(Gravity.CENTER);
-            LinearLayout.LayoutParams laterParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            laterParams.setMargins(0, (int)(12 * getResources().getDisplayMetrics().density), 0, 0); btnLater.setPadding(0, (int)(10 * getResources().getDisplayMetrics().density), 0, (int)(10 * getResources().getDisplayMetrics().density));
-            btnLater.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { dialog.dismiss(); } });
-            root.addView(btnLater, laterParams);
+            LinearLayout.LayoutParams laterParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT); laterParams.setMargins(0, (int)(12 * getResources().getDisplayMetrics().density), 0, 0); btnLater.setPadding(0, (int)(10 * getResources().getDisplayMetrics().density), 0, (int)(10 * getResources().getDisplayMetrics().density));
+            btnLater.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { dialog.dismiss(); } }); root.addView(btnLater, laterParams);
         }
-        dialog.setContentView(root);
-        android.util.DisplayMetrics metrics = getResources().getDisplayMetrics(); int width = (int) (metrics.widthPixels * 0.85);
-        if (dialog.getWindow() != null) { dialog.getWindow().setLayout(width, android.view.ViewGroup.LayoutParams.WRAP_CONTENT); }
-        dialog.show();
+        dialog.setContentView(root); android.util.DisplayMetrics metrics = getResources().getDisplayMetrics(); int width = (int) (metrics.widthPixels * 0.85); if (dialog.getWindow() != null) { dialog.getWindow().setLayout(width, android.view.ViewGroup.LayoutParams.WRAP_CONTENT); } dialog.show();
     }
 
     private boolean isMaintenanceTime() {
@@ -316,20 +246,12 @@ public class MainActivity extends Activity {
     }
 
     private void showMaintenanceScreen(WebView view) {
-        String maintenanceHtml = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"></head>" +
-            "<body style=\"display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;margin:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-align:center;padding:20px;\">" +
-            "<h2 style=\"color:#1e293b;margin:0 0 12px;font-size:24px;font-weight:800;\">Sistem Maintenance</h2>" +
-            "<button onclick=\"prompt('AndroidBridge:checkMaintenance', '')\" style=\"background:#1791f4;color:#fff;border:none;padding:16px 32px;border-radius:16px;font-size:16px;font-weight:bold;cursor:pointer;width:100%;max-width:280px;\">Cek Kembali Akses</button>" +
-            "</body></html>";
+        String maintenanceHtml = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"></head><body style=\"display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;margin:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-align:center;padding:20px;\"><h2 style=\"color:#1e293b;margin:0 0 12px;font-size:24px;font-weight:800;\">Sistem Maintenance</h2><button onclick=\"prompt('AndroidBridge:checkMaintenance', '')\" style=\"background:#1791f4;color:#fff;border:none;padding:16px 32px;border-radius:16px;font-size:16px;font-weight:bold;cursor:pointer;width:100%;max-width:280px;\">Cek Kembali Akses</button></body></html>";
         view.loadDataWithBaseURL(null, maintenanceHtml, "text/html", "UTF-8", null);
     }
 
     private void showOfflineScreen(WebView view) {
-        String offlineHtml = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"></head>" +
-            "<body style=\"display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;margin:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-align:center;padding:20px;\">" +
-            "<h2 style=\"color:#1e293b;margin:0 0 10px;font-size:22px;font-weight:800;\">Koneksi Terputus</h2>" +
-            "<button onclick=\"prompt('AndroidBridge:retryConnection', '')\" style=\"background:#1791f4;color:#fff;border:none;padding:14px 32px;border-radius:16px;font-size:16px;font-weight:bold;cursor:pointer;width:100%;max-width:250px;\">Coba Lagi</button>" +
-            "</body></html>";
+        String offlineHtml = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"></head><body style=\"display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;margin:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-align:center;padding:20px;\"><h2 style=\"color:#1e293b;margin:0 0 10px;font-size:22px;font-weight:800;\">Koneksi Terputus</h2><button onclick=\"prompt('AndroidBridge:retryConnection', '')\" style=\"background:#1791f4;color:#fff;border:none;padding:14px 32px;border-radius:16px;font-size:16px;font-weight:bold;cursor:pointer;width:100%;max-width:250px;\">Coba Lagi</button></body></html>";
         view.loadDataWithBaseURL(null, offlineHtml, "text/html", "UTF-8", null);
     }
 
@@ -347,24 +269,20 @@ public class MainActivity extends Activity {
         if (intent != null && intent.getExtras() != null) {
             String type = intent.getStringExtra("type");
             if ("deposit_success".equals(type)) {
-                String notifId = intent.getStringExtra("notification_id");
-                if (notifId != null) { urlToLoad = BASE_URL + "user/notifications.php?show_id=" + notifId; } else { urlToLoad = BASE_URL + "user/notifications.php"; }
+                String notifId = intent.getStringExtra("notification_id"); if (notifId != null) { urlToLoad = BASE_URL + "user/notifications.php?show_id=" + notifId; } else { urlToLoad = BASE_URL + "user/notifications.php"; }
             } else if ("transaction_success".equals(type) || "transaction_failed".equals(type)) {
-                String trxId = intent.getStringExtra("transaction_id");
-                if (trxId != null) { urlToLoad = BASE_URL + "user/transaction_detail.php?id=" + trxId; }
+                String trxId = intent.getStringExtra("transaction_id"); if (trxId != null) { urlToLoad = BASE_URL + "user/transaction_detail.php?id=" + trxId; }
             } else if (intent.hasExtra("target_url")) {
                 String target = intent.getStringExtra("target_url");
-                if (target != null && !target.isEmpty()) {
-                    if (target.startsWith("http")) { urlToLoad = target; } else {
-                        if (target.startsWith("/")) { target = target.substring(1); }
-                        urlToLoad = BASE_URL + target;
-                    }
-                }
+                if (target != null && !target.isEmpty()) { if (target.startsWith("http")) { urlToLoad = target; } else { if (target.startsWith("/")) { target = target.substring(1); } urlToLoad = BASE_URL + target; } }
             }
         }
         return urlToLoad;
     }
 
+    // ==========================================================
+    // JAVASCRIPT BRIDGE 
+    // ==========================================================
     private void injectAndroidBridge() {
         String js = "javascript:(function(){" +
             "if (typeof window.Android === 'undefined') {" +
@@ -380,7 +298,11 @@ public class MainActivity extends Activity {
             "saveImage: function(base64, filename) { prompt('AndroidBridge:saveImage', base64 + '|||SPLIT|||' + filename); }," +
             "openApp: function(url) { prompt('AndroidBridge:openApp', url); }," +
             "updateFCMToken: function() { prompt('AndroidBridge:updateFCMToken', ''); }," +
-            "setAppLock: function(status) { prompt('AndroidBridge:setAppLock', status); }" +
+            "setAppLock: function(status) { prompt('AndroidBridge:setAppLock', status); }," +
+            
+            // [FUNGSI BARU UNTUK FITUR PRINTER SELECTOR]
+            "getPrinters: function() { return prompt('AndroidBridge:getPrinters', ''); }," +
+            "printReceiptMAC: function(data) { prompt('AndroidBridge:printReceiptMAC', data); }" +
             "};" +
             "}" +
             "})()";
@@ -396,32 +318,14 @@ public class MainActivity extends Activity {
             else if (action.equals("showToast")) { showToast(defaultValue); result.confirm(""); return true; } 
             else if (action.equals("openContactPicker")) { openContactPicker(); result.confirm(""); return true; } 
             else if (action.equals("scanBarcode")) { scanBarcode(); result.confirm(""); return true; } 
-            else if (action.equals("printReceipt")) { 
-                String textToPrint = defaultValue; String logoBase64 = "";
-                if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) {
-                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|");
-                    textToPrint = parts.length > 0 ? parts[0] : ""; logoBase64 = parts.length > 1 ? parts[1] : "";
-                }
-                autoPrintReceipt(textToPrint, logoBase64); result.confirm(""); return true; 
-            }
             else if (action.equals("shareImage")) { shareImage(defaultValue); result.confirm(""); return true; } 
-            else if (action.equals("shareReceiptText")) {
-                String base64Str = defaultValue; String captionStr = "Berikut adalah bukti pembayaran.";
-                if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) {
-                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|");
-                    base64Str = parts.length > 0 ? parts[0] : ""; captionStr = parts.length > 1 ? parts[1] : "";
-                }
-                shareReceiptText(base64Str, captionStr); result.confirm(""); return true;
-            }
-            else if (action.equals("saveImage")) {
-                String base64Str = defaultValue; String fileNameStr = "QRIS_Deposit.png";
-                if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) {
-                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|");
-                    base64Str = parts.length > 0 ? parts[0] : ""; fileNameStr = parts.length > 1 ? parts[1] : "QRIS_Deposit.png";
-                }
-                saveImage(base64Str, fileNameStr); result.confirm(""); return true;
-            }
             else if (action.equals("openApp")) { openAppNative(defaultValue); result.confirm(""); return true; }
+            else if (action.equals("updateFCMToken")) { runOnUiThread(new Runnable() { @Override public void run() { sendFcmTokenToWeb(); } }); result.confirm(""); return true; }
+            else if (action.equals("setAppLock")) {
+                boolean isEnabled = defaultValue.equals("true");
+                getSharedPreferences("CurvaPrefs", MODE_PRIVATE).edit().putBoolean("is_app_lock_enabled", isEnabled).apply();
+                result.confirm(""); return true;
+            }
             else if (action.equals("retryConnection")) {
                 runOnUiThread(new Runnable() {
                         @Override public void run() {
@@ -440,31 +344,177 @@ public class MainActivity extends Activity {
                     });
                 result.confirm(""); return true; 
             }
-            else if (action.equals("updateFCMToken")) {
-                runOnUiThread(new Runnable() { @Override public void run() { sendFcmTokenToWeb(); } });
-                result.confirm(""); return true;
+            else if (action.equals("shareReceiptText")) {
+                String base64Str = defaultValue; String captionStr = "Berikut adalah bukti pembayaran.";
+                if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) {
+                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|");
+                    base64Str = parts.length > 0 ? parts[0] : ""; captionStr = parts.length > 1 ? parts[1] : "";
+                }
+                shareReceiptText(base64Str, captionStr); result.confirm(""); return true;
             }
-            else if (action.equals("setAppLock")) {
-                boolean isEnabled = defaultValue.equals("true");
-                getSharedPreferences("CurvaPrefs", MODE_PRIVATE).edit().putBoolean("is_app_lock_enabled", isEnabled).apply();
+            else if (action.equals("saveImage")) {
+                String base64Str = defaultValue; String fileNameStr = "QRIS_Deposit.png";
+                if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) {
+                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|");
+                    base64Str = parts.length > 0 ? parts[0] : ""; fileNameStr = parts.length > 1 ? parts[1] : "QRIS_Deposit.png";
+                }
+                saveImage(base64Str, fileNameStr); result.confirm(""); return true;
+            }
+            
+            // ===============================================
+            // TANGKAPAN FUNGSI PRINT BARU
+            // ===============================================
+            else if (action.equals("printReceipt")) { 
+                String textToPrint = defaultValue; String logoBase64 = "";
+                if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) {
+                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|");
+                    textToPrint = parts.length > 0 ? parts[0] : ""; logoBase64 = parts.length > 1 ? parts[1] : "";
+                }
+                autoPrintReceipt(textToPrint, logoBase64); result.confirm(""); return true; 
+            }
+            else if (action.equals("getPrinters")) {
+                result.confirm(getPairedPrintersList());
+                return true;
+            }
+            else if (action.equals("printReceiptMAC")) {
+                String textToPrint = ""; String logoBase64 = ""; String macAddress = "";
+                if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) {
+                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|");
+                    textToPrint = parts.length > 0 ? parts[0] : "";
+                    logoBase64 = parts.length > 1 ? parts[1] : "";
+                    macAddress = parts.length > 2 ? parts[2] : "";
+                }
+                printToSpecificPrinter(textToPrint, logoBase64, macAddress);
                 result.confirm(""); return true;
             }
         }
         return false;
     }
 
-    private void autoPrintReceipt(final String textToPrint, final String logoBase64) {
+    // =========================================================================
+    // FITUR CETAK THERMAL (DENGAN PEMILIHAN MAC ADDRESS)
+    // =========================================================================
+    
+    // MENDAPATKAN DAFTAR PRINTER BLUETOOTH
+    private String getPairedPrintersList() {
         final BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (bluetoothAdapter == null) { webView.post(new Runnable() { @Override public void run() { webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(false, 'Perangkat tidak mendukung Bluetooth');}", null); } }); return; }
-        if (!bluetoothAdapter.isEnabled()) { webView.post(new Runnable() { @Override public void run() { webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(false, 'Silakan aktifkan Bluetooth HP Anda');}", null); } }); return; }
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
+            return "NOT_SUPPORTED"; // Minta web menampilkan error
+        }
+        
+        // Meminta izin bluetooth di Android 12+
         if (Build.VERSION.SDK_INT >= 31) {
             if (checkSelfPermission("android.permission.BLUETOOTH_CONNECT") != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT"}, REQUEST_BLUETOOTH_PERMISSION);
-                webView.post(new Runnable() { @Override public void run() { webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(false, 'Izin Bluetooth belum diberikan');}", null); } }); return;
+                return "[]"; 
             }
         }
+
+        JSONArray arr = new JSONArray();
+        Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
+        for (BluetoothDevice device : pairedDevices) {
+            try {
+                String name = device.getName() != null ? device.getName() : "Printer";
+                int majorClass = device.getBluetoothClass() != null ? device.getBluetoothClass().getMajorDeviceClass() : -1;
+                
+                // Hanya kirim device yang bertipe printer atau yang namanya dicurigai sebagai printer thermal
+                if (majorClass == BluetoothClass.Device.Major.IMAGING || name.toLowerCase().contains("print") || name.toLowerCase().contains("mtp") || name.toLowerCase().contains("zj") || name.toLowerCase().contains("58") || name.toLowerCase().contains("80") || name.toLowerCase().contains("pt-") || name.toLowerCase().contains("blue")) {
+                    JSONObject obj = new JSONObject();
+                    obj.put("name", name);
+                    obj.put("mac", device.getAddress());
+                    arr.put(obj);
+                }
+            } catch (Exception e) {}
+        }
+        return arr.toString();
+    }
+
+    // CETAK KE MAC ADDRESS SPESIFIK YANG DIPILIH DARI WEB
+    private void printToSpecificPrinter(final String textToPrint, final String logoBase64, final String macAddress) {
+        final BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled() || macAddress == null || macAddress.isEmpty()) {
+            notifyWebPrintFailed("Gagal menyambung. Bluetooth tidak aktif atau MAC salah.");
+            return;
+        }
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    BluetoothDevice device = bluetoothAdapter.getRemoteDevice(macAddress);
+                    UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+                    
+                    byte[] imageBytes = null;
+                    if (logoBase64 != null && logoBase64.startsWith("data:image")) {
+                        try {
+                            String pureBase64 = logoBase64.substring(logoBase64.indexOf(",") + 1); 
+                            byte[] decodedString = Base64.decode(pureBase64, Base64.DEFAULT); 
+                            Bitmap bitmap = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+                            if(bitmap != null){
+                                int targetWidth = 360; targetWidth = (targetWidth / 8) * 8; 
+                                int targetHeight = (int) (bitmap.getHeight() * ((float) targetWidth / bitmap.getWidth()));
+                                Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true); 
+                                imageBytes = decodeBitmapToEscPos(scaledBitmap);
+                            }
+                        } catch (Exception e) {}
+                    }
+
+                    BluetoothSocket socket = device.createRfcommSocketToServiceRecord(uuid); 
+                    socket.connect(); 
+                    OutputStream outputStream = socket.getOutputStream();
+                    outputStream.write(new byte[]{27, 64}); 
+                    
+                    if (imageBytes != null) {
+                        outputStream.write(new byte[]{27, 97, 1}); outputStream.flush(); 
+                        int chunkSize = 256; 
+                        for (int i = 0; i < imageBytes.length; i += chunkSize) { 
+                            int length = Math.min(chunkSize, imageBytes.length - i); 
+                            outputStream.write(imageBytes, i, length); outputStream.flush(); 
+                            Thread.sleep(15); 
+                        }
+                        outputStream.write("\n\n".getBytes()); outputStream.flush(); Thread.sleep(400); 
+                    }
+                    
+                    outputStream.write(textToPrint.getBytes("UTF-8")); 
+                    outputStream.write("\n\n\n".getBytes()); 
+                    outputStream.flush(); 
+                    socket.close();
+
+                    final String pName = device.getName();
+                    runOnUiThread(new Runnable() {
+                        @Override public void run() {
+                            webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(true, 'Berhasil mencetak di printer: " + pName + "');}", null);
+                        }
+                    });
+
+                } catch (Exception e) {
+                    notifyWebPrintFailed("Gagal terhubung ke printer. Pastikan printer menyala dan belum terhubung ke perangkat lain.");
+                }
+            }
+        }).start();
+    }
+
+    private void notifyWebPrintFailed(final String msg) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(false, '" + msg + "');}", null);
+            }
+        });
+    }
+
+    // CETAK OTOMATIS (FALLBACK JIKA METODE BARU GAGAL)
+    private void autoPrintReceipt(final String textToPrint, final String logoBase64) {
+        final BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        if (bluetoothAdapter == null) { notifyWebPrintFailed("Perangkat tidak mendukung Bluetooth"); return; }
+        if (!bluetoothAdapter.isEnabled()) { notifyWebPrintFailed("Silakan aktifkan Bluetooth HP Anda"); return; }
+        if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission("android.permission.BLUETOOTH_CONNECT") != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT"}, REQUEST_BLUETOOTH_PERMISSION);
+            notifyWebPrintFailed("Izin Bluetooth belum diberikan"); return;
+        }
+
         final Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
-        if (pairedDevices.size() == 0) { webView.post(new Runnable() { @Override public void run() { webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(false, 'Belum ada printer yang di-pairing');}", null); } }); return; }
+        if (pairedDevices.size() == 0) { notifyWebPrintFailed("Belum ada printer yang di-pairing"); return; }
+
         final ArrayList<BluetoothDevice> likelyPrinters = new ArrayList<>(); final ArrayList<BluetoothDevice> otherDevices = new ArrayList<>();
         for (BluetoothDevice device : pairedDevices) {
             String name = device.getName() != null ? device.getName().toLowerCase() : "";
@@ -473,7 +523,7 @@ public class MainActivity extends Activity {
             if (majorClass == BluetoothClass.Device.Major.IMAGING || name.contains("print") || name.contains("mtp") || name.contains("zj") || name.contains("58") || name.contains("80") || name.contains("pt-") || name.contains("blue")) { likelyPrinters.add(device); } else { otherDevices.add(device); }
         }
         final ArrayList<BluetoothDevice> devicesToTry = new ArrayList<>(); devicesToTry.addAll(likelyPrinters); devicesToTry.addAll(otherDevices);
-        if (devicesToTry.isEmpty()) { webView.post(new Runnable() { @Override public void run() { webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(false, 'Tidak ada perangkat tipe printer');}", null); } }); return; }
+        if (devicesToTry.isEmpty()) { notifyWebPrintFailed("Tidak ada perangkat tipe printer"); return; }
 
         new Thread(new Runnable() {
                 @Override public void run() {
@@ -487,7 +537,7 @@ public class MainActivity extends Activity {
                                 int targetHeight = (int) (bitmap.getHeight() * ((float) targetWidth / bitmap.getWidth()));
                                 Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true); imageBytes = decodeBitmapToEscPos(scaledBitmap);
                             }
-                        } catch (Exception e) { e.printStackTrace(); }
+                        } catch (Exception e) {}
                     }
 
                     for (BluetoothDevice device : devicesToTry) {
@@ -504,13 +554,10 @@ public class MainActivity extends Activity {
                         } catch (Exception e) { continue; }
                     }
 
-                    final boolean finalResult = isPrinted; final String finalName = printerName;
-                    runOnUiThread(new Runnable() { 
-                            @Override public void run() { 
-                                if (finalResult) { webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(true, 'Berhasil mencetak di printer: " + finalName + "');}", null); } 
-                                else { webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(false, 'Gagal terhubung ke printer. Pastikan printer menyala.');}", null); }
-                            } 
-                        });
+                    if (isPrinted) {
+                        final String pN = printerName;
+                        runOnUiThread(new Runnable() { @Override public void run() { webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(true, 'Berhasil mencetak di printer: " + pN + "');}", null); } });
+                    } else { notifyWebPrintFailed("Gagal terhubung ke seluruh printer paired."); }
                 }
             }).start();
     }
@@ -582,77 +629,35 @@ public class MainActivity extends Activity {
     }
 
     // ============================================
-    // FUNGSI HELPER (Wajib Ada di Paling Bawah)
+    // FUNGSI HELPER
     // ============================================
-    public void showToast(final String message) { 
-        runOnUiThread(new Runnable() { 
-            @Override public void run() { Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show(); } 
-        }); 
-    }
+    public void showToast(final String message) { runOnUiThread(new Runnable() { @Override public void run() { Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show(); } }); }
 
     private void setStatusBarColor(String color) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) { 
-            Window window = getWindow(); 
-            window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS); 
-            window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS); 
-            window.setStatusBarColor(Color.parseColor(color)); 
-            window.getDecorView().setSystemUiVisibility(0); 
-        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) { Window window = getWindow(); window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS); window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS); window.setStatusBarColor(Color.parseColor(color)); window.getDecorView().setSystemUiVisibility(0); }
     }
 
     private boolean isNetworkAvailable() {
         ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        if (connectivityManager != null) { 
-            NetworkInfo activeNetworkInfo = connectivityManager.getActiveNetworkInfo(); 
-            return activeNetworkInfo != null && activeNetworkInfo.isConnected(); 
-        } 
-        return false;
+        if (connectivityManager != null) { NetworkInfo activeNetworkInfo = connectivityManager.getActiveNetworkInfo(); return activeNetworkInfo != null && activeNetworkInfo.isConnected(); } return false;
     }
 
     private void setupWebView() {
-        WebSettings settings = webView.getSettings(); 
-        settings.setJavaScriptEnabled(true); 
-        settings.setDomStorageEnabled(true); 
-        settings.setDatabaseEnabled(true); 
-        settings.setAllowFileAccess(true); 
-        settings.setAllowContentAccess(true); 
-        webView.setOverScrollMode(View.OVER_SCROLL_NEVER); 
-        settings.setAppCacheEnabled(true); 
-        settings.setAppCachePath(getApplicationContext().getCacheDir().getAbsolutePath()); 
-        settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK); 
-        settings.setLoadsImagesAutomatically(true); 
-        settings.setBlockNetworkImage(false);
-
-        String defaultAgent = settings.getUserAgentString(); 
-        settings.setUserAgentString(defaultAgent + " CurvaApp");
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) { 
-            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW); 
-        }
+        WebSettings settings = webView.getSettings(); settings.setJavaScriptEnabled(true); settings.setDomStorageEnabled(true); settings.setDatabaseEnabled(true); settings.setAllowFileAccess(true); settings.setAllowContentAccess(true); webView.setOverScrollMode(View.OVER_SCROLL_NEVER); settings.setAppCacheEnabled(true); settings.setAppCachePath(getApplicationContext().getCacheDir().getAbsolutePath()); settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK); settings.setLoadsImagesAutomatically(true); settings.setBlockNetworkImage(false);
+        String defaultAgent = settings.getUserAgentString(); settings.setUserAgentString(defaultAgent + " CurvaApp");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) { settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW); }
 
         webView.setWebChromeClient(new WebChromeClient() {
                 @Override
                 public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
-                    if (MainActivity.this.filePathCallback != null) { MainActivity.this.filePathCallback.onReceiveValue(null); } 
-                    MainActivity.this.filePathCallback = filePathCallback; 
-                    String[] acceptTypes = fileChooserParams.getAcceptTypes(); 
-                    Intent intent; String chooserTitle;
-                    if (acceptTypes != null && acceptTypes.length > 0 && acceptTypes[0].contains("image")) { 
-                        intent = new Intent(Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI); 
-                        intent.setType("image/*"); chooserTitle = "Pilih Aplikasi Foto"; 
-                    } else { 
-                        intent = new Intent(Intent.ACTION_GET_CONTENT); intent.addCategory(Intent.CATEGORY_OPENABLE); 
-                        intent.setType("*/*"); chooserTitle = "Pilih Aplikasi File Manager"; 
-                    }
+                    if (MainActivity.this.filePathCallback != null) { MainActivity.this.filePathCallback.onReceiveValue(null); } MainActivity.this.filePathCallback = filePathCallback; String[] acceptTypes = fileChooserParams.getAcceptTypes(); Intent intent; String chooserTitle;
+                    if (acceptTypes != null && acceptTypes.length > 0 && acceptTypes[0].contains("image")) { intent = new Intent(Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI); intent.setType("image/*"); chooserTitle = "Pilih Aplikasi Foto"; } else { intent = new Intent(Intent.ACTION_GET_CONTENT); intent.addCategory(Intent.CATEGORY_OPENABLE); intent.setType("*/*"); chooserTitle = "Pilih Aplikasi File Manager"; }
                     Intent chooserIntent = Intent.createChooser(intent, chooserTitle);
-                    try { startActivityForResult(chooserIntent, FILE_CHOOSER_REQUEST); return true; } 
-                    catch (ActivityNotFoundException e) { MainActivity.this.filePathCallback = null; return false; }
+                    try { startActivityForResult(chooserIntent, FILE_CHOOSER_REQUEST); return true; } catch (ActivityNotFoundException e) { MainActivity.this.filePathCallback = null; return false; }
                 }
-
                 @Override
                 public boolean onJsPrompt(WebView view, String url, String message, String defaultValue, JsPromptResult result) {
-                    if (MainActivity.this.handleAndroidBridge(message, defaultValue, result)) { return true; } 
-                    return super.onJsPrompt(view, url, message, defaultValue, result);
+                    if (MainActivity.this.handleAndroidBridge(message, defaultValue, result)) { return true; } return super.onJsPrompt(view, url, message, defaultValue, result);
                 }
             });
     }
@@ -670,8 +675,7 @@ public class MainActivity extends Activity {
     private void scanBarcode() {
         try { Intent intent = new Intent(this, CaptureActivity.class); intent.putExtra("SCAN_MODE", "QR_CODE_MODE,PRODUCT_MODE"); intent.putExtra("ORIENTATION_LOCK", true); startActivityForResult(intent, BARCODE_SCAN_REQUEST); } 
         catch (Exception e) {
-            try { Intent intent = new Intent("com.google.zxing.client.android.SCAN"); intent.putExtra("SCAN_MODE", "QR_CODE_MODE,PRODUCT_MODE"); startActivityForResult(intent, BARCODE_SCAN_REQUEST); } 
-            catch (Exception ex) { }
+            try { Intent intent = new Intent("com.google.zxing.client.android.SCAN"); intent.putExtra("SCAN_MODE", "QR_CODE_MODE,PRODUCT_MODE"); startActivityForResult(intent, BARCODE_SCAN_REQUEST); } catch (Exception ex) { }
         }
     }
 
@@ -710,9 +714,7 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        if (requestCode == REQUEST_APP_LOCK) {
-            if (resultCode == RESULT_OK) { unlockAppAndHideSplash(); } else { showToast("Akses Ditolak! Kunci aplikasi gagal dibuka."); finish(); }
-        }
+        if (requestCode == REQUEST_APP_LOCK) { if (resultCode == RESULT_OK) { unlockAppAndHideSplash(); } else { showToast("Akses Ditolak! Kunci aplikasi gagal dibuka."); finish(); } }
 
         if (requestCode == FILE_CHOOSER_REQUEST) {
             Uri[] results = null; if (resultCode == RESULT_OK && data != null) { results = new Uri[]{data.getData()}; }

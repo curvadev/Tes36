@@ -69,55 +69,68 @@ jobs:
       - name: Izin Eksekusi Gradle
         run: chmod +x gradlew
 
-      - name: 1. Menerapkan Konfigurasi dari Web Admin
+      - name: 1. Menerapkan Konfigurasi Dasar
         run: |
           echo "Memproses Parameter Dinamis..."
-          if [ -n "${{ github.event.inputs.app_name }}" ]; then
-            sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">${{ github.event.inputs.app_name }}<\/string>/g" app/src/main/res/values/strings.xml
-          fi
-          if [ -n "${{ github.event.inputs.package_name }}" ]; then
-            sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/g" app/build.gradle
-          fi
-          if [ -n "${{ github.event.inputs.version_name }}" ]; then
-            sed -i "s/versionName \".*\"/versionName \"${{ github.event.inputs.version_name }}\"/g" app/build.gradle
-          fi
-          if [ -n "${{ github.event.inputs.version_code }}" ]; then
-            sed -i "s/versionCode .*/versionCode ${{ github.event.inputs.version_code }}/g" app/build.gradle
-          fi
-          if [ -n "${{ github.event.inputs.min_sdk }}" ]; then
-            sed -i "s/minSdk .*/minSdk ${{ github.event.inputs.min_sdk }}/g" app/build.gradle
-          fi
-          if [ -n "${{ github.event.inputs.target_sdk }}" ]; then
-            sed -i "s/targetSdk .*/targetSdk ${{ github.event.inputs.target_sdk }}/g" app/build.gradle
-          fi
-          if [ -n "${{ github.event.inputs.google_services_url }}" ]; then
-            wget -O app/google-services.json "${{ github.event.inputs.google_services_url }}"
-          fi
-          if [ -n "${{ github.event.inputs.logo_url }}" ]; then
-            wget -O app/src/main/res/drawable/ic_launcher.png "${{ github.event.inputs.logo_url }}"
-          fi
-          if [ -n "${{ github.event.inputs.splash_url }}" ]; then
-            wget -O app/src/main/res/drawable/splash_logo.png "${{ github.event.inputs.splash_url }}"
-          fi
+          if [ -n "${{ github.event.inputs.app_name }}" ]; then sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">${{ github.event.inputs.app_name }}<\/string>/g" app/src/main/res/values/strings.xml; fi
+          if [ -n "${{ github.event.inputs.package_name }}" ]; then sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/g" app/build.gradle; fi
+          if [ -n "${{ github.event.inputs.version_name }}" ]; then sed -i "s/versionName \".*\"/versionName \"${{ github.event.inputs.version_name }}\"/g" app/build.gradle; fi
+          if [ -n "${{ github.event.inputs.version_code }}" ]; then sed -i "s/versionCode .*/versionCode ${{ github.event.inputs.version_code }}/g" app/build.gradle; fi
+          if [ -n "${{ github.event.inputs.min_sdk }}" ]; then sed -i "s/minSdk .*/minSdk ${{ github.event.inputs.min_sdk }}/g" app/build.gradle; fi
+          if [ -n "${{ github.event.inputs.target_sdk }}" ]; then sed -i "s/targetSdk .*/targetSdk ${{ github.event.inputs.target_sdk }}/g" app/build.gradle; fi
+          if [ -n "${{ github.event.inputs.google_services_url }}" ]; then wget -O app/google-services.json "${{ github.event.inputs.google_services_url }}"; fi
+          if [ -n "${{ github.event.inputs.logo_url }}" ]; then wget -O app/src/main/res/drawable/ic_launcher.png "${{ github.event.inputs.logo_url }}"; fi
+          if [ -n "${{ github.event.inputs.splash_url }}" ]; then wget -O app/src/main/res/drawable/splash_logo.png "${{ github.event.inputs.splash_url }}"; fi
 
-      - name: 2. Robot Penambal Kode (Java, XML, Manifest)
+      - name: 2. Robot Upgrade Ke Google Code Scanner (Python)
+        run: |
+          python3 -c '
+          import re
+          # Suntik library ke Gradle
+          with open("app/build.gradle", "r") as f: gradle = f.read()
+          if "play-services-code-scanner" not in gradle:
+              gradle = gradle.replace("dependencies {", "dependencies {\n    implementation \"com.google.android.gms:play-services-code-scanner:16.1.0\"\n")
+              with open("app/build.gradle", "w") as f: f.write(gradle)
+          
+          # Bedah file Java dan ganti fungsi Scanner jadul
+          with open("app/src/main/java/com/curva/ppob/MainActivity.java", "r") as f: java = f.read()
+          
+          old_func = r"private void scanBarcode\(\)\s*\{.*?(?=private void openContactPicker\(\))"
+          new_func = """private void scanBarcode() {
+              com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions options = new com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions.Builder().enableAutoZoom().build();
+              com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(this, options).startScan()
+                  .addOnSuccessListener(new com.google.android.gms.tasks.OnSuccessListener<com.google.mlkit.vision.barcode.common.Barcode>() {
+                      @Override
+                      public void onSuccess(com.google.mlkit.vision.barcode.common.Barcode barcode) {
+                          final String res = barcode.getRawValue();
+                          if (res != null) webView.post(new Runnable() { public void run() { webView.evaluateJavascript("javascript:onBarcodeScanned(\'" + res + "\')", null); } });
+                      }
+                  }).addOnFailureListener(new com.google.android.gms.tasks.OnFailureListener() {
+                      @Override
+                      public void onFailure(Exception e) { showToast("Scan gagal atau dibatalkan"); }
+                  });
+          }
+          
+          """
+          
+          java = re.sub(old_func, new_func, java, flags=re.DOTALL)
+          with open("app/src/main/java/com/curva/ppob/MainActivity.java", "w") as f: f.write(java)
+          '
+
+      - name: 3. Robot Penambal Kode AndroidX (Java, XML, Manifest)
         run: |
           find app/src/main/java -name "*.java" -exec sed -i 's/android.support.v4.content.FileProvider/androidx.core.content.FileProvider/g' {} +
           find app/src/main/java -name "*.java" -exec sed -i 's/android.support.v4.app.NotificationCompat/androidx.core.app.NotificationCompat/g' {} +
           find app/src/main/java -name "*.java" -exec sed -i 's/android.support.v4.app.ActivityCompat/androidx.core.app.ActivityCompat/g' {} +
           find app/src/main/java -name "*.java" -exec sed -i 's/android.support.v4.content.ContextCompat/androidx.core.content.ContextCompat/g' {} +
           find app/src/main/java -name "*.java" -exec sed -i 's/android.support.annotation.NonNull/androidx.annotation.NonNull/g' {} +
-          
           find app/src/main/java -name "*.java" -exec sed -i 's/.*setAppCacheEnabled.*/\/\/ &/' {} +
           find app/src/main/java -name "*.java" -exec sed -i 's/.*setAppCachePath.*/\/\/ &/' {} +
-          
           find app/src/main/java -name "*.java" -exec sed -i 's/import com.google.firebase.iid.FirebaseInstanceId;/\/\/ import com.google.firebase.iid.FirebaseInstanceId;/g' {} +
           find app/src/main/java -name "MainActivity.java" -exec sed -i '/import android.os.Bundle;/a import com.google.firebase.messaging.FirebaseMessaging;' {} +
           find app/src/main/java -name "MyFirebaseMessagingService.java" -exec sed -i 's/.bigLargeIcon(null)/.bigLargeIcon((android.graphics.Bitmap) null)/g' {} +
-
           sed -i 's/package="com.curva.ppob"//g' app/src/main/AndroidManifest.xml
           sed -i 's/android.support.v4.content.FileProvider/androidx.core.content.FileProvider/g' app/src/main/AndroidManifest.xml
-          
           find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.v4.widget.SwipeRefreshLayout/androidx.swiperefreshlayout.widget.SwipeRefreshLayout/g' {} +
           find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.v4.widget.DrawerLayout/androidx.drawerlayout.widget.DrawerLayout/g' {} +
           find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.design.widget.NavigationView/com.google.android.material.navigation.NavigationView/g' {} +
@@ -126,10 +139,9 @@ jobs:
           find app/src/main/res/layout -name "*.xml" -exec sed -i 's/android.support.v7.widget.Toolbar/androidx.appcompat.widget.Toolbar/g' {} +
           find app/src/main/java -name "*.java" -exec sed -i 's/PendingIntent.FLAG_ONE_SHOT/PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE/g' {} +
           find app/src/main/java -name "*.java" -exec sed -i 's/PendingIntent.FLAG_UPDATE_CURRENT/PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE/g' {} +
-          
           sed -i 's/<activity android:name=".MainActivity"/<activity android:name=".MainActivity" android:exported="true"/g' app/src/main/AndroidManifest.xml
 
-      - name: 3. Build Aplikasi (Isolasi Tugas & Injeksi Memori)
+      - name: 4. Build Aplikasi (Isolasi Tugas & Injeksi Memori)
         run: |
           echo "Menyuntikkan Memori Tambahan ke Mesin..."
           echo "" >> gradle.properties
@@ -148,7 +160,7 @@ jobs:
             ./gradlew bundleRelease --no-daemon --max-workers=2
           fi
 
-      - name: 4. Tandatangani Aplikasi
+      - name: 5. Tandatangani Aplikasi
         run: |
           BUILD_TOOLS_DIR=$(ls -d $ANDROID_SDK_ROOT/build-tools/* | tail -1)
           APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
@@ -165,7 +177,7 @@ jobs:
             mv "$AAB_FILE" app/build/outputs/bundle/release/CurvaPayment-Final.aab
           fi
 
-      - name: 5. Download Hasil ke Artifact GitHub
+      - name: 6. Download Hasil ke Artifact GitHub
         uses: actions/upload-artifact@v4
         with:
           name: Aplikasi-Final
@@ -173,16 +185,12 @@ jobs:
             app/build/outputs/apk/release/CurvaPayment-Final.apk
             app/build/outputs/bundle/release/CurvaPayment-Final.aab
 
-      - name: 6. Kirim Hasil ke Server Admin Web
+      - name: 7. Kirim Hasil ke Server Admin Web
         if: github.event.inputs.server_upload_url != ''
         run: |
-          echo "Mengirim file ke server web admin..."
           if [ "${{ github.event.inputs.build_type }}" == "apk" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then
-            echo "Mengirim APK..."
             curl -F "file=@app/build/outputs/apk/release/CurvaPayment-Final.apk" -F "token=RAHASIA_UPLOAD_123" "${{ github.event.inputs.server_upload_url }}"
           fi
-          
           if [ "${{ github.event.inputs.build_type }}" == "aab" ] || [ "${{ github.event.inputs.build_type }}" == "both" ]; then
-            echo "Mengirim AAB..."
             curl -F "file=@app/build/outputs/bundle/release/CurvaPayment-Final.aab" -F "token=RAHASIA_UPLOAD_123" "${{ github.event.inputs.server_upload_url }}"
           fi

@@ -86,6 +86,9 @@ public class MainActivity extends Activity {
     private static final int REQUEST_APP_LOCK = 9999; 
 
     private boolean isAppUnlocked = false; 
+    
+    // Variabel untuk mencegah keluar aplikasi secara tidak sengaja
+    private boolean doubleBackToExitPressedOnce = false;
 
     private final String BASE_URL = "https://curva.web.id/ppob/";
     private final String HOME_URL = BASE_URL + "index.php";
@@ -98,13 +101,9 @@ public class MainActivity extends Activity {
 
         FrameLayout root = new FrameLayout(this);
         
-        // =========================================================================
-        // PERBAIKAN BUG HEADER (GLOBAL): Mencegah WebView menabrak Status Bar
-        // Berlaku untuk semua halaman, tidak perlu ubah PHP sama sekali!
-        // =========================================================================
+        // PERBAIKAN HEADER STATUS BAR
         root.setFitsSystemWindows(true);
-        root.setBackgroundColor(Color.parseColor("#1791f4")); // Warna dasar di balik status bar
-        // =========================================================================
+        root.setBackgroundColor(Color.parseColor("#1791f4")); 
 
         webView = new WebView(this);
         root.addView(webView, new FrameLayout.LayoutParams(
@@ -223,6 +222,72 @@ public class MainActivity extends Activity {
             @Override public void run() { triggerNativeAppLock(); } 
         }, 2500);
     }
+
+    // =========================================================================
+    // FITUR BARU: SMART BACK BUTTON (Mencegah Keluar Paksa via Gesture Back)
+    // =========================================================================
+    @Override
+    public boolean onKeyDown(int keyCode, android.view.KeyEvent event) {
+        if (event.getAction() == android.view.KeyEvent.ACTION_DOWN && keyCode == android.view.KeyEvent.KEYCODE_BACK) {
+            handleCustomBack();
+            return true; // Cegat tombol fisik/gesture agar tidak mematikan Activity
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
+    @Override
+    public void onBackPressed() {
+        handleCustomBack();
+    }
+
+    private void handleCustomBack() {
+        if (webView != null) {
+            // Skrip JS Pintar: Periksa apakah ada Bottom Sheet / Popup yang sedang terbuka (class '.show')
+            // Jika ada, tutup popup tersebut alih-alih berpindah halaman.
+            webView.evaluateJavascript(
+                "javascript:(function() {" +
+                "   var handled = false;" +
+                "   var overlays = document.querySelectorAll('.show');" +
+                "   if (overlays.length > 0) {" +
+                "       overlays.forEach(function(el) { el.classList.remove('show'); });" +
+                "       handled = true;" +
+                "   }" +
+                "   return handled ? 'true' : 'false';" +
+                "})()", new ValueCallback<String>() {
+                    @Override
+                    public void onReceiveValue(String value) {
+                        // Jika JS mengembalikan "true", berarti popup berhasil ditutup, batalkan goBack
+                        if (!"\"true\"".equals(value) && !"true".equals(value)) {
+                            // Jika tidak ada popup, periksa apakah WebView bisa kembali ke menu sebelumnya
+                            if (webView.canGoBack()) {
+                                webView.goBack();
+                            } else {
+                                // Jika halaman sudah mentok (Dashboard), minta konfirmasi keluar
+                                performDoubleBackToExit();
+                            }
+                        }
+                    }
+                });
+        } else {
+            performDoubleBackToExit();
+        }
+    }
+
+    private void performDoubleBackToExit() {
+        if (doubleBackToExitPressedOnce) {
+            finish();
+            return;
+        }
+        this.doubleBackToExitPressedOnce = true;
+        showToast("Tekan sekali lagi untuk keluar aplikasi");
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                doubleBackToExitPressedOnce = false;
+            }
+        }, 2000);
+    }
+    // =========================================================================
 
     private void triggerNativeAppLock() {
         if (isAppUnlocked) return; 
@@ -1025,7 +1090,4 @@ public class MainActivity extends Activity {
             webView.post(new Runnable() { @Override public void run() { webView.evaluateJavascript(js, null); } });
         } catch (Exception e) { e.printStackTrace(); }
     }
-
-    @Override
-    public void onBackPressed() { if (webView != null && webView.canGoBack()) { webView.goBack(); } else { super.onBackPressed(); } }
 }

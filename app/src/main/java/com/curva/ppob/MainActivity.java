@@ -97,6 +97,15 @@ public class MainActivity extends Activity {
         setStatusBarColor("#f5f5f5");
 
         FrameLayout root = new FrameLayout(this);
+        
+        // =========================================================================
+        // PERBAIKAN BUG HEADER (GLOBAL): Mencegah WebView menabrak Status Bar
+        // Berlaku untuk semua halaman, tidak perlu ubah PHP sama sekali!
+        // =========================================================================
+        root.setFitsSystemWindows(true);
+        root.setBackgroundColor(Color.parseColor("#1791f4")); // Warna dasar di balik status bar
+        // =========================================================================
+
         webView = new WebView(this);
         root.addView(webView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, 
@@ -154,9 +163,6 @@ public class MainActivity extends Activity {
         loadFcmToken(); 
 
         webView.setWebViewClient(new WebViewClient() {
-            // =========================================================================
-            // PERBAIKAN: Mencegah WebView menahan link intent://, market://, dll.
-            // =========================================================================
             @SuppressWarnings("deprecation")
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
@@ -172,7 +178,7 @@ public class MainActivity extends Activity {
                     }
                     return true;
                 }
-                return false; // Biarkan HTTP/HTTPS biasa diload di dalam WebView
+                return false; 
             }
 
             @TargetApi(Build.VERSION_CODES.N)
@@ -180,7 +186,6 @@ public class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return shouldOverrideUrlLoading(view, request.getUrl().toString());
             }
-            // =========================================================================
 
             @Override 
             public void onPageFinished(WebView view, String url) { 
@@ -390,16 +395,11 @@ public class MainActivity extends Activity {
         btnUpdate.setOnClickListener(new View.OnClickListener() { 
             @Override public void onClick(View v) { 
                 dialog.dismiss(); 
-                
-                // =========================================================================
-                // PERBAIKAN: Buka link (APK/Playstore) di luar aplikasi
-                // =========================================================================
                 try {
                     String finalUrl = (url != null && !url.isEmpty()) ? url : "https://curva.web.id/download.php";
                     Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(finalUrl));
                     startActivity(intent);
                 } catch (Exception e) {
-                    // Fallback jika tidak ada browser
                     webView.loadUrl(url != null ? url : "https://curva.web.id/download.php"); 
                 }
             } 

@@ -150,6 +150,11 @@ jobs:
           find app/src/main/java -name "*.java" -exec sed -i 's/PendingIntent.FLAG_ONE_SHOT/PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE/g' {} +
           find app/src/main/java -name "*.java" -exec sed -i 's/PendingIntent.FLAG_UPDATE_CURRENT/PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE/g' {} +
           sed -i 's/<activity android:name=".MainActivity"/<activity android:name=".MainActivity" android:exported="true"/g' app/src/main/AndroidManifest.xml
+          
+          # --- PERBAIKAN BUG HEADER MENABRAK STATUS BAR (INJEKSI OTOMATIS) ---
+          find app/src/main/res/layout -name "*.xml" -exec sed -i 's/xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android"/xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android" android:fitsSystemWindows="true"/g' {} +
+          find app/src/main/res/layout -name "*.xml" -exec sed -i 's/<WebView/<WebView android:fitsSystemWindows="true"/g' {} +
+          # -------------------------------------------------------------------
 
       - name: 4. Build Aplikasi (Isolasi Tugas & Injeksi Memori)
         run: |

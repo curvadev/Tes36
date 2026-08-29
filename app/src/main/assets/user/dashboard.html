@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded" rel="stylesheet">
+    <title>Curva Payment</title>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background: #f3f4f6; color: #111827; overscroll-behavior-y: none; }
+        a { text-decoration: none; color: inherit; }
+        :root { --theme-color: #1791f4; --theme-gradient: linear-gradient(135deg, #1791f4 0%, #0ea5e9 100%); }
+        .app { max-width: 520px; margin: auto; background: #f3f4f6; min-height: 100vh; position: relative; }
+        .spa-section{ display:none; } .spa-section.active{ display:block; }
+        
+        #section-home { display: none; flex-direction: column; position: absolute; top: 0; left: 0; right: 0; height: 100vh; height: 100dvh; background: #f8fafc; z-index: 10; overflow: hidden; } #section-home.active { display: flex; }
+        .home-nav-fixed { flex-shrink: 0; background: var(--theme-color); color: white; padding: 15px; position: relative; z-index: 30; }
+        .header-top { display: flex; justify-content: space-between; align-items: center; } .header-left-group { display: flex; align-items: center; gap: 16px; }
+        .user-greeting { font-size: 22px; font-weight: 600; display: flex; gap: 6px; align-items: center; letter-spacing: 0.3px;}
+        .header-right-icons { display: flex; gap: 10px; align-items: center; } .header-icon-btn { color: white; display: flex; align-items: center; justify-content: center; } .header-icon-btn .material-symbols-rounded { font-size: 25px; }
+        .notif-btn { position: relative; } .notif-badge { position: absolute; top: -4px; right: -4px; background: #ef4444; color: white; min-width: 16px; height: 16px; border-radius: 999px; font-size: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; border: 1.5px solid #1791f4; }
+        
+        .home-scroll-list { flex: 1; overflow-y: auto; position: relative; z-index: 20; padding-bottom: 100px; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; } .home-scroll-list::-webkit-scrollbar { display: none; }
+        .home-bg-extension { background: var(--theme-color); height: 60px; position: absolute; top: 0; left: 0; right: 0; z-index: 1; border-radius: 0 0 24px 24px; } .home-content-wrapper { position: relative; z-index: 2; padding-top: 10px; }
+        .balance-card { background: #ffffff; margin: 0 16px 16px 16px; padding: 24px 20px; border-radius: 24px; box-shadow: 0 8px 30px rgba(23, 145, 244, 0.08); position: relative; border: 1px solid #e0f2fe; }
+        .balance-info { display: flex; justify-content: space-between; align-items: flex-end; } .balance-label { font-size: 13px; color: #64748b; font-weight: 600; margin-bottom: 6px; text-transform: uppercase;}
+        .balance-value { font-size: 32px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px; line-height: 1; }
+        .balance-actions-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 24px; padding-top: 20px; border-top: 1.5px dashed #f1f5f9; } .action-item { display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; transition: transform 0.2s; } .action-item:active { transform: scale(0.92); } .action-icon-wrapper { background: #f0f9ff; width: 56px; height: 56px; border-radius: 20px; border: 1.5px solid #e0f2fe; display: flex; align-items: center; justify-content: center; color: var(--theme-color); } .action-item span:last-child { font-size: 11px; font-weight: 700; color: var(--theme-color); }
+        
+        .banner-slider-container { margin: 16px; position: relative; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.06); min-height: 120px; background: #e2e8f0; } .banner-slider { display: flex; transition: transform 0.5s ease-in-out; cursor: grab; } .banner-slide { flex: 0 0 100%; position: relative; } .banner-slide img { width: 100%; height: auto; display: block; border-radius: 15px; } .banner-dots { position: absolute; bottom: 12px; left: 0; right: 0; display: flex; justify-content: center; gap: 8px; z-index: 2; } .banner-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.5); transition: all 0.2s; cursor: pointer; } .banner-dot.active { background: white; width: 20px; border-radius: 10px; }
+        .section { padding: 0 16px; margin-top: 24px; margin-bottom: 24px; } .section-title { font-size: 16px; font-weight: 800; margin-bottom: 14px; color: #1e293b; display: flex; align-items: center; gap: 8px; } .section-title::before { content: ''; width: 4px; height: 18px; background: var(--theme-color); border-radius: 4px; }
+        .menu-card { background: white; border-radius: 20px; padding: 20px 12px; box-shadow: 0 10px 25px rgba(0, 0, 0, .03); border: 1px solid #f1f5f9; } .menu-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px 8px; } .menu-item-home { display: flex; flex-direction: column; align-items: center; text-align: center; cursor: pointer; transition: transform 0.2s; text-decoration: none; } .menu-item-home:active { transform: scale(0.92); } .menu-icon-home { width: 56px; height: 56px; border-radius: 20px; background: #ffffff; border: 1.5px solid #f1f5f9; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; } .menu-icon-home .material-symbols-rounded { font-size: 30px; } .menu-name { font-size: 11px; font-weight: 700; color: #475569; line-height: 1.2; }
+        .c-pulsa { color: #0ea5e9; } .c-data { color: #10b981; } .c-pln { color: #f59e0b; } .c-ewallet { color: #8b5cf6; } .c-digital { color: #ec4899; } .c-voucher { color: #14b8a6; } .c-promo { color: #ef4444; } .c-telp { color: #6366f1; } .c-tv { color: #f43f5e; } .c-tagihan { color: #d97706; } .c-internet { color: #0284c7; } .c-finance { color: #4f46e5; } .c-pbb { color: #84cc16; }
+
+        #section-transaksi { display: none; flex-direction: column; position: absolute; top: 0; left: 0; right: 0; height: 100vh; background: #f3f4f6; z-index: 10; overflow: hidden; } #section-transaksi.active { display: flex; }
+        .transaksi-header { flex-shrink: 0; background: var(--theme-gradient); color: #fff; padding: 30px 20px 0; } .transaksi-title { font-size: 20px; font-weight: 700; margin-bottom: 10px; margin-top: -15px; } .transaksi-search { background: #fff; border-radius: 10px; padding: 10px 10px; margin-bottom: 5px; } .transaksi-search input { width: 100%; border: none; outline: none; font-size: 16px; } .transaksi-tabs { display: flex; } .transaksi-tab { flex: 1; text-align: center; padding: 15px 5px; color: rgba(255,255,255,.75); font-size: 16px; font-weight: 700; cursor: pointer; position: relative;} .transaksi-tab.active { color: #fff; } .transaksi-tab.active::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: #fff; }
+        .transaction-list { flex: 1; overflow-y: auto; padding: 0 0 100px 0; background: #f3f4f6; } .trx-card { display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 15px 20px; border-bottom: 1px solid #e5e7eb; } .trx-body { flex: 1; min-width: 0; padding-right: 15px; } .trx-product { font-size: 16px; font-weight: 700; color: #1f2937; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .trx-target { font-size: 14px; color: #6b7280; margin-top: 5px; } .trx-date { font-size: 13px; color: #9ca3af; margin-top: 3px; } .trx-right { text-align: right; } .trx-status { display: inline-block; padding: 8px 15px; border-radius: 999px; color: #fff; font-size: 13px; font-weight: 700; min-width: 75px; text-align:center;} .status-success { background: #22c55e; } .status-pending { background: #f59e0b; } .status-failed { background: #ef4444; } .trx-price { margin-top: 10px; font-size: 15px; font-weight: 500; color: #1791f4; }
+        
+        #section-informasi { display: none; flex-direction: column; position: absolute; top: 0; left: 0; right: 0; height: 100vh; background: #f3f4f6; z-index: 10; } #section-informasi.active { display: flex; }
+        .info-top-bar { flex-shrink: 0; background: var(--theme-gradient); color: white; height: 60px; display: flex; align-items: center; padding: 0 20px; position: relative; z-index: 30; } .info-top-title { font-size: 20px; font-weight: 800; }
+        .info-scroll-area { flex: 1; overflow-y: auto; position: relative; z-index: 20; padding-bottom: 100px; } .info-bg-extension { background: var(--theme-gradient); height: 40px; position: absolute; top: 0; left: 0; right: 0; z-index: 1; border-radius: 0 0 20px 20px; }
+        .info-shortcut-card { background: white; margin: 16px; padding: 18px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,.05); position: relative; z-index: 2; margin-top: 10px; } .info-shortcut-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; } .info-shortcut-item { display: flex; flex-direction: column; align-items: center; gap: 8px; transition: transform 0.2s;} .info-shortcut-item:active { transform: scale(0.95); } .info-shortcut-icon { width: 56px; height: 56px; border-radius: 18px; display: flex; align-items: center; justify-content: center; } .info-shortcut-icon img { width: 32px; height: 32px; object-fit: contain; } .info-shortcut-title { font-size: 11px; font-weight: 600; color: #475569; text-align: center; line-height: 1.3; }
+        .info-list { padding: 0 16px 10px; position: relative; z-index: 2; } .info-card { background: #fff; border-radius: 15px; padding: 20px; margin-bottom: 10px; box-shadow: 0 4px 16px rgba(0,0,0,.05); overflow: hidden; } .info-image { width: 100%; height: auto; max-height: 220px; object-fit: contain; border-radius: 12px; margin-bottom: 14px; display: block; background: #f8fafc; } .info-badge { display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px; border-radius: 20px; font-size: 10px; font-weight: 700; margin-bottom: 12px; } .badge-info { background: #dbeafe; color: #1791f4; } .badge-promo { background: #fef3c7; color: #92400e; } .badge-warning { background: #fee2e2; color: #dc2626; } .info-date { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #64748b; margin-bottom: 12px; } .info-title { font-size: 16px; font-weight: 700; color: #1e293b; margin-bottom: 10px; } .info-content { font-size: 14px; line-height: 1.7; color: #475569; white-space: pre-line; }
+
+        #section-akun { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #ffffff; z-index: 10; overflow-y: auto; } #section-akun.active { display: block; }
+        .akun-mini-bar { position: fixed; top: 0; left: 0; right: 0; max-width: 520px; margin: auto; height: 60px; background: var(--theme-gradient); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; color: white; z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; box-shadow: 0 2px 10px rgba(0,0,0,0.1); } .akun-mini-bar.scrolled { opacity: 1; pointer-events: auto; } .mini-bar-title { font-size: 18px; font-weight: 700; } .mini-bar-action { color: white; display:flex; }
+        .akun-header-modern { background: var(--theme-gradient); color: white; padding: 40px 20px 30px; position: relative; text-align: center; } .btn-edit-profile { position: absolute; top: 20px; right: 20px; color: white; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.2); width: 36px; height: 36px; border-radius: 50%; }
+        .akun-profile-center { display: flex; flex-direction: column; align-items: center; text-align: center; } .akun-avatar-modern { width: 85px; height: 85px; background: white; border-radius: 50%; padding: 4px; margin-bottom: 12px; box-shadow: 0 8px 15px rgba(0,0,0,0.1); overflow: hidden; } .akun-avatar-modern img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; } .akun-avatar-modern .placeholder { width: 100%; height: 100%; background: #eff6ff; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--theme-color); } .akun-avatar-modern .placeholder .material-symbols-rounded { font-size: 45px; }
+        .akun-name-modern { font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 6px; } .akun-name-modern .material-symbols-rounded { font-size: 16px; cursor: pointer; opacity: 0.8; } .akun-phone-modern { font-size: 14px; font-weight: 600; margin-top: 4px; opacity: 0.9; } .akun-badge-modern { font-size: 12px; opacity: 0.7; margin-top: 2px; }
+        .sticky-tabs { position: sticky; top: 60px; z-index: 40; background: white; display: flex; border-bottom: 1px solid #f1f5f9; box-shadow: 0 2px 10px rgba(0,0,0,0.02); } .akun-tab { flex: 1; text-align: center; padding: 15px 12px; font-size: 14px; font-weight: 700; color: #94a3b8; cursor: pointer; position: relative; } .akun-tab.active { color: var(--theme-color); } .akun-tab.active::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: var(--theme-color); border-radius: 3px 3px 0 0; }
+        .akun-pane { display: none; background: #ffffff; min-height: calc(100vh - 110px); padding-bottom: 95px; } .akun-pane.active { display: block; }
+        .native-list-item { display: flex; align-items: center; padding: 18px 20px; border-bottom: 1px solid #f1f5f9; color: #1e293b; background: white; transition: background .2s; } .native-list-item:active { background: #f8fafc; } .native-list-icon { margin-right: 16px; color: #64748b; display: flex; } .native-list-icon .material-symbols-rounded { font-size: 24px; } .native-list-body { flex: 1; } .native-list-title { font-size: 15px; font-weight: 600; } .native-list-value { font-size: 14px; color: #94a3b8; font-weight: 500; } .native-list-right { display: flex; align-items: center; color: #cbd5e1; }
+        .text-danger { color: #ef4444 !important; } .text-danger .native-list-icon { color: #ef4444; }
+        .profile-data-item { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; } .profile-data-label { font-size: 12px; color: #64748b; font-weight: 600; margin-bottom: 4px; text-transform: uppercase; } .profile-data-value { font-size: 15px; font-weight: 600; color: #1e293b; word-break: break-word; }
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; } .switch input { opacity: 0; width: 0; height: 0; } .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .3s; border-radius: 24px; } .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; } input:checked + .slider { background-color: var(--theme-color); } input:checked + .slider:before { transform: translateX(20px); }
+
+        .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; max-width: 520px; margin: 0 auto; background: #ffffff; display: flex; height: 65px; z-index: 900; box-shadow: 0 -4px 25px rgba(0, 0, 0, 0.05); border-top: 1px solid #f1f5f9; padding-bottom: env(safe-area-inset-bottom); }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: #94a3b8; gap: 4px; cursor: pointer; transition: color 0.2s ease; }
+        .nav-item .material-symbols-rounded { font-size: 26px; transition: transform 0.2s ease, font-variation-settings 0.2s; font-variation-settings: 'FILL' 0; }
+        .nav-item.active { color: var(--theme-color); } .nav-item.active .material-symbols-rounded { font-variation-settings: 'FILL' 1; transform: scale(1.1); }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; max-width: 520px; margin: auto; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 10000; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: all 0.3s ease; } .modal-overlay.show { opacity: 1; visibility: visible; } .modal-content { background: white; width: 85%; padding: 30px 24px; border-radius: 28px; text-align: center; transform: scale(0.9) translateY(20px); transition: all 0.3s ease; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); } .modal-overlay.show .modal-content { transform: scale(1) translateY(0); } .modal-icon-wrapper { background: #eff6ff; width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; color: #1791f4; } .modal-title { font-size: 20px; font-weight: 800; margin-bottom: 10px; } .modal-text { font-size: 14px; color: #64748b; line-height: 1.6; margin-bottom: 24px; } .modal-btn { background: #1791f4; color: white; border: none; width: 100%; padding: 14px; border-radius: 16px; font-size: 15px; font-weight: 700; cursor: pointer; }
+    </style>
+</head>
+<body>
+<div class="app">
+
+    <!-- HOME SECTION -->
+    <div id="section-home" class="spa-section active">
+        <div class="home-nav-fixed">
+            <div class="header-top">
+                <div class="header-left-group"><div class="user-greeting"><span>Hai,</span><span id="ui_header_nama">Memuat...</span></div></div>
+                <div class="header-right-icons">
+                    <a href="https://curva.web.id/ppob/user/chat.php" class="header-icon-btn"><span class="material-symbols-rounded">headset_mic</span></a>
+                    <a href="https://curva.web.id/ppob/user/notifications.php" class="header-icon-btn notif-btn" id="ui_notif_btn"><span class="material-symbols-rounded">notifications</span></a>
+                </div>
+            </div>
+        </div>
+        <div class="home-scroll-list">
+            <div class="home-bg-extension"></div>
+            <div class="home-content-wrapper">
+                <div class="balance-card">
+                    <div class="balance-info">
+                        <div><div class="balance-label">Saldo Aktif</div><div class="balance-value" id="userBalance">Rp 0</div></div>
+                    </div>
+                    <div class="balance-actions-grid">
+                        <a href="https://curva.web.id/ppob/user/deposit/create.php?v2" class="action-item"><div class="action-icon-wrapper"><span class="material-symbols-rounded">add</span></div><span>Top Up</span></a>
+                        <a href="https://curva.web.id/ppob/user/pages/transfer.php" class="action-item"><div class="action-icon-wrapper"><span class="material-symbols-rounded">arrow_upward</span></div><span>Transfer</span></a>
+                        <a href="https://curva.web.id/ppob/user/wallet/mutations.php" class="action-item"><div class="action-icon-wrapper"><span class="material-symbols-rounded">receipt_long</span></div><span>Mutasi</span></a>
+                        <a href="https://curva.web.id/ppob/user/leaderboard.php" class="action-item"><div class="action-icon-wrapper"><span class="material-symbols-rounded">celebration</span></div><span>Event</span></a>
+                    </div>
+                </div>
+                <div class="banner-slider-container">
+                    <div class="banner-slider" id="bannerSlider">
+                        <div class="banner-slide"><img src="https://apps.curva.web.id/uploads/hosted_images/slider-1.jpg"></div>
+                        <div class="banner-slide"><img src="https://apps.curva.web.id/uploads/hosted_images/slider-2.jpg"></div>
+                    </div>
+                    <div class="banner-dots" id="bannerDots"></div>
+                </div>
+                <div class="section">
+                    <div class="section-title">Prabayar & Topup</div>
+                    <div class="menu-card">
+                        <div class="menu-grid">
+                            <a href="https://curva.web.id/ppob/user/pages/pulsa.php" class="menu-item-home"><div class="menu-icon-home"><span class="material-symbols-rounded c-pulsa">smartphone</span></div><div class="menu-name">Pulsa</div></a>
+                            <a href="https://curva.web.id/ppob/user/pages/data.php" class="menu-item-home"><div class="menu-icon-home"><span class="material-symbols-rounded c-data">wifi_tethering</span></div><div class="menu-name">Data</div></a>
+                            <a href="https://curva.web.id/ppob/user/pages/promo.php" class="menu-item-home"><div class="menu-icon-home"><span class="material-symbols-rounded c-promo">local_offer</span></div><div class="menu-name">Promo</div></a>
+                            <a href="https://curva.web.id/ppob/user/pages/token_pln.php" class="menu-item-home"><div class="menu-icon-home"><span class="material-symbols-rounded c-pln">bolt</span></div><div class="menu-name">PLN</div></a>
+                            <a href="https://curva.web.id/ppob/user/pages/ewallet_menu.php" class="menu-item-home"><div class="menu-icon-home"><span class="material-symbols-rounded c-ewallet">account_balance_wallet</span></div><div class="menu-name">E-Wallet</div></a>
+                            <a href="https://curva.web.id/ppob/user/pages/digital_menu.php" class="menu-item-home"><div class="menu-icon-home"><span class="material-symbols-rounded c-digital">sports_esports</span></div><div class="menu-name">Game</div></a>
+                            <a href="https://curva.web.id/ppob/user/pages/inject_voucher.php" class="menu-item-home"><div class="menu-icon-home"><span class="material-symbols-rounded c-voucher">card_giftcard</span></div><div class="menu-name">Voucher</div></a>
+                            <a href="https://curva.web.id/ppob/user/pages/telp.php" class="menu-item-home"><div class="menu-icon-home"><span class="material-symbols-rounded c-telp">call</span></div><div class="menu-name">Telp</div></a>
+                        </div>
+                    </div>
+                </div>
+                <div class="section" style="margin-bottom: 30px;">
+                    <div class="section-title">Pascabayar & Tagihan</div>
+                    <div class="menu-card">
+                        <div class="menu-grid">
+                            <a href="https://curva.web.id/ppob/user/pages/tagihan.php?kategori=Listrik" class="menu-item-home"><div class="menu-icon-home"><span class="material-symbols-rounded c-pln">lightbulb</span></div><div class="menu-name">Listrik</div></a>
+                            <a href="https://curva.web.id/ppob/user/pages/tagihan.php?kategori=BPJS" class="menu-item-home"><div class="menu-icon-home"><span class="material-symbols-rounded c-data">health_and_safety</span></div><div class="menu-name">BPJS</div></a>
+                            <a href="https://curva.web.id/ppob/user/pages/tagihan.php?kategori=PDAM" class="menu-item-home"><div class="menu-icon-home"><span class="material-symbols-rounded c-pulsa">water_drop</span></div><div class="menu-name">PDAM</div></a>
+                            <a href="https://curva.web.id/ppob/user/pages/tagihan.php?kategori=Lainnya" class="menu-item-home"><div class="menu-icon-home"><span class="material-symbols-rounded c-tagihan">receipt_long</span></div><div class="menu-name">Lainnya</div></a>
+                        </div>
+                    </div>
+                </div>
+            </div> 
+        </div> 
+    </div>
+
+    <!-- TRANSAKSI SECTION -->
+    <div id="section-transaksi" class="spa-section">
+        <div class="transaksi-header">
+            <div class="transaksi-title">Riwayat Transaksi</div>
+            <div class="transaksi-search"><input type="text" id="searchTransaksiInput" placeholder="Cari Transaksi disini..."></div>
+            <div class="transaksi-tabs">
+                <div class="transaksi-tab active" onclick="filterTrx('all',this)">Semua</div>
+                <div class="transaksi-tab" onclick="filterTrx('success',this)">Sukses</div>
+                <div class="transaksi-tab" onclick="filterTrx('pending',this)">Proses</div>
+                <div class="transaksi-tab" onclick="filterTrx('failed',this)">Gagal</div>
+            </div>
+        </div>
+        <div class="transaction-list" id="trxList">
+            <div style="text-align:center; padding:40px; color:#94a3b8;">Memuat data...</div>
+        </div>
+    </div>
+
+    <!-- INFORMASI SECTION -->
+    <div id="section-informasi" class="spa-section">
+        <div class="info-top-bar"><div class="info-top-title">Informasi & Promo</div></div>
+        <div class="info-scroll-area">
+            <div class="info-bg-extension"></div>
+            <div class="info-shortcut-card">
+                <div class="info-shortcut-grid">
+                    <a href="javascript:void(0)" onclick="bukaAplikasiLuar('https://chat.whatsapp.com/CgTUTUZbTy1At6JiuPM56c')" class="info-shortcut-item"><div class="info-shortcut-icon"><img src="https://cdn-icons-png.flaticon.com/512/733/733585.png"></div><div class="info-shortcut-title">Grup WA</div></a>
+                    <a href="https://curva.web.id/ppob/user/chat.php" class="info-shortcut-item"><div class="info-shortcut-icon" style="background: #e0f2fe; color: #1791f4;"><span class="material-symbols-rounded" style="font-size: 32px;">support_agent</span></div><div class="info-shortcut-title">Live Chat</div></a>
+                </div>
+            </div>
+            <div id="infoList" class="info-list"></div>
+        </div>
+    </div>
+
+    <!-- AKUN SECTION -->
+    <div id="section-akun" class="spa-section" onscroll="handleAkunScroll(this)">
+        <div class="akun-mini-bar" id="akunMiniBar">
+            <div class="mini-bar-title" id="ui_minibar_nama">Memuat...</div>
+            <a href="https://curva.web.id/ppob/user/edit_profile.php" class="mini-bar-action"><span class="material-symbols-rounded">edit</span></a>
+        </div>
+        <div class="akun-header-modern" id="akunLargeHeader">
+            <a href="https://curva.web.id/ppob/user/edit_profile.php" class="btn-edit-profile"><span class="material-symbols-rounded">edit</span></a>
+            <div class="akun-profile-center" id="akunProfileCenter">
+                <div class="akun-avatar-modern" id="ui_avatar_container"><div class="placeholder"><span class="material-symbols-rounded">person</span></div></div>
+                <div class="akun-name-modern" id="ui_akun_nama_container"><span id="ui_akun_nama">Memuat...</span> <span class="material-symbols-rounded">content_copy</span></div>
+                <div class="akun-phone-modern" id="ui_akun_phone">...</div>
+                <div class="akun-badge-modern" id="ui_akun_email">...</div>
+            </div>
+        </div>
+        <div class="sticky-tabs" id="akunTabs">
+            <div class="akun-tab active" onclick="switchAkunTab('menu')">MENU</div>
+            <div class="akun-tab" onclick="switchAkunTab('profil')">PROFIL</div>
+        </div>
+        <div id="akun-pane-menu" class="akun-pane active">
+            <div style="height: 10px; background: #f8fafc;"></div>
+            
+            <a href="https://curva.web.id/ppob/user/wallet/mutations.php" class="native-list-item">
+                <div class="native-list-icon"><span class="material-symbols-rounded">account_balance_wallet</span></div>
+                <div class="native-list-body"><div class="native-list-title">Saldo</div></div>
+                <div class="native-list-value" id="ui_saldo_menu">Rp 0</div>
+            </a>
+            <a href="https://curva.web.id/ppob/user/catatan_penjualan.php" class="native-list-item">
+                <div class="native-list-icon"><span class="material-symbols-rounded">menu_book</span></div>
+                <div class="native-list-body"><div class="native-list-title">Catatan Penjualan</div></div>
+                <div class="native-list-right"><span class="material-symbols-rounded">chevron_right</span></div>
+            </a>
+            <div style="height: 10px; background: #f8fafc;"></div>
+            <div class="native-list-item" style="cursor: default;">
+                <div class="native-list-icon"><span class="material-symbols-rounded">screen_lock_portrait</span></div>
+                <div class="native-list-body">
+                    <div class="native-list-title">Kunci Aplikasi</div>
+                    <div class="native-list-value" style="font-size:12px; margin-top:2px;">Gunakan Sidik Jari/Sandi HP</div>
+                </div>
+                <div class="native-list-right"><label class="switch"><input type="checkbox" id="toggleAppLock" onchange="switchAppLock(this)"><span class="slider"></span></label></div>
+            </div>
+            <a href="https://curva.web.id/ppob/user/change_password.php" class="native-list-item">
+                <div class="native-list-icon"><span class="material-symbols-rounded">lock</span></div>
+                <div class="native-list-body"><div class="native-list-title">Ubah Kata Sandi</div></div>
+                <div class="native-list-right"><span class="material-symbols-rounded">chevron_right</span></div>
+            </a>
+            <a href="https://curva.web.id/ppob/user/set_pin.php" class="native-list-item" id="pinMenuNative">
+                <div class="native-list-icon"><span class="material-symbols-rounded">pin</span></div>
+                <div class="native-list-body"><div class="native-list-title" id="pinTitleNative">Atur PIN</div></div>
+                <div class="native-list-right"><span class="material-symbols-rounded">chevron_right</span></div>
+            </a>
+            <a href="https://curva.web.id/ppob/user/setting_struk.php" class="native-list-item">
+                <div class="native-list-icon"><span class="material-symbols-rounded">receipt_long</span></div>
+                <div class="native-list-body"><div class="native-list-title">Atur Struk</div></div>
+                <div class="native-list-right"><span class="material-symbols-rounded">chevron_right</span></div>
+            </a>
+            <div style="height: 10px; background: #f8fafc;"></div>
+            <a href="javascript:void(0)" class="native-list-item text-danger" onclick="showLogoutModal()">
+                <div class="native-list-icon"><span class="material-symbols-rounded">logout</span></div>
+                <div class="native-list-body"><div class="native-list-title">Keluar Akun</div></div>
+            </a>
+        </div>
+        <div id="akun-pane-profil" class="akun-pane">
+            <div style="height: 10px; background: #f8fafc;"></div>
+            <div class="profile-data-item"><div class="profile-data-label">Nama Lengkap</div><div class="profile-data-value" id="ui_prof_nama">Memuat...</div></div>
+            <div class="profile-data-item"><div class="profile-data-label">Alamat Email</div><div class="profile-data-value" id="ui_prof_email">Memuat...</div></div>
+            <div class="profile-data-item"><div class="profile-data-label">Nomor Handphone</div><div class="profile-data-value" id="ui_prof_phone">Memuat...</div></div>
+            <div class="profile-data-item"><div class="profile-data-label">Jenis Kelamin</div><div class="profile-data-value" id="ui_prof_gender">Memuat...</div></div>
+            <div class="profile-data-item"><div class="profile-data-label">Alamat Lengkap</div><div class="profile-data-value" style="font-weight: 500; color: #475569; font-size:14px; line-height:1.4;" id="ui_prof_address">Memuat...</div></div>
+            <div class="profile-data-item"><div class="profile-data-label">Tanggal Bergabung</div><div class="profile-data-value local-date-only" id="ui_prof_join" data-utc="">Memuat...</div></div>
+        </div>
+    </div>
+
+    <!-- BOTTOM NAVIGATION -->
+    <div class="bottom-nav" id="bottomNav">
+        <div class="nav-item active" data-target="section-home" onclick="switchTab('section-home', this)"><span class="material-symbols-rounded">home</span><span>Beranda</span></div>
+        <div class="nav-item" data-target="section-transaksi" onclick="switchTab('section-transaksi', this)"><span class="material-symbols-rounded">receipt_long</span><span>Transaksi</span></div>
+        <div class="nav-item" data-target="section-informasi" onclick="switchTab('section-informasi', this)"><span class="material-symbols-rounded">campaign</span><span>Informasi</span></div>
+        <div class="nav-item" data-target="section-akun" onclick="switchTab('section-akun', this)"><span class="material-symbols-rounded">person</span><span>Akun</span></div>
+    </div>
+
+    <!-- MODALS -->
+    <div id="successModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-icon-wrapper"><span class="material-symbols-rounded">check_circle</span></div>
+            <h3 class="modal-title">Berhasil</h3>
+            <p class="modal-text" id="successText"></p>
+            <button class="modal-btn" onclick="closeSuccessModal()">OK</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="logoutModal">
+        <div class="modal-content">
+            <div class="modal-icon-wrapper" style="background:#fee2e2;color:#dc2626;"><span class="material-symbols-rounded">logout</span></div>
+            <h3 class="modal-title">Logout Akun</h3>
+            <p class="modal-text">Apakah Anda yakin ingin keluar dari akun?</p>
+            <div style="display:flex;gap:10px;">
+                <button type="button" onclick="closeLogoutModal()" style="flex:1;padding:14px;border:none;border-radius:16px;background:#e5e7eb;font-weight:700;">Batal</button>
+                <button type="button" onclick="doLogout()" style="flex:1;padding:14px;border:none;border-radius:16px;background:#dc2626;color:white;font-weight:700;">Logout</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    window.transactionsData = [];
+
+    async function initDashboard() {
+        try {
+            // URL ABSOLUT UNTUK API SERVER
+            const res = await fetch('https://curva.web.id/ppob/api/dashboard.php');
+            const data = await res.json();
+            
+            if (data.status === 'unauthorized') { window.location.href = '../auth/login.html'; return; }
+            if (data.user.require_pin) { window.location.href = 'https://curva.web.id/ppob/user/set_pin.php'; return; }
+
+            document.getElementById('ui_header_nama').innerText = data.user.nama;
+            document.getElementById('userBalance').innerText = data.user.saldo_formatted;
+            if (data.unread_notif > 0) { document.getElementById('ui_notif_btn').innerHTML = `<span class="material-symbols-rounded">notifications</span><span class="notif-badge">${data.unread_notif}</span>`; }
+
+            window.transactionsData = data.transactions;
+            renderTransactionsHTML();
+
+            document.getElementById('ui_minibar_nama').innerText = data.user.nama;
+            document.getElementById('ui_akun_nama').innerText = data.user.nama;
+            document.getElementById('ui_akun_nama_container').onclick = () => copyToClipboard(data.user.nama, 'Nama disalin');
+            document.getElementById('ui_akun_phone').innerText = data.user.no_hp;
+            document.getElementById('ui_akun_email').innerText = `(${data.user.email})`;
+            document.getElementById('ui_saldo_menu').innerText = data.user.saldo_formatted;
+
+            if(data.user.profile_photo) { document.getElementById('ui_avatar_container').innerHTML = `<img src="https://curva.web.id/ppob/uploads/profile/${data.user.profile_photo}">`; }
+
+            const pinMenu = document.getElementById('pinMenuNative'); const pinTitle = document.getElementById('pinTitleNative');
+            pinMenu.href = data.user.require_pin ? 'https://curva.web.id/ppob/user/set_pin.php' : 'https://curva.web.id/ppob/user/change_pin.php';
+            pinTitle.innerText = data.user.require_pin ? 'Buat PIN Transaksi' : 'Ubah PIN Transaksi';
+
+            document.getElementById('ui_prof_nama').innerText = data.user.nama; document.getElementById('ui_prof_email').innerText = data.user.email; document.getElementById('ui_prof_phone').innerText = data.user.no_hp; document.getElementById('ui_prof_gender').innerText = data.user.jenis_kelamin || 'Belum diatur'; document.getElementById('ui_prof_address').innerText = data.user.alamat || 'Belum diatur'; document.getElementById('ui_prof_join').setAttribute('data-utc', data.user.created_at);
+            
+            formatLocalTimes();
+        } catch (e) { console.error(e); }
+    }
+
+    function renderTransactionsHTML() {
+        const trxList = document.getElementById('trxList'); let html = '';
+        if (window.transactionsData.length === 0) { trxList.innerHTML = '<div style="margin:20px;text-align:center;color:#94a3b8;">Tidak ada transaksi.</div>'; return; }
+        window.transactionsData.forEach(trx => {
+            const detailUrl = (trx.transaction_type === 'inject_bulk') ? 'https://curva.web.id/ppob/user/pages/transaction_detail_inject.php?id=' : 'https://curva.web.id/ppob/user/transaction_detail.php?id=';
+            let statusText = trx.status === 'success' ? 'Sukses' : (trx.status === 'pending' ? 'Proses' : 'Gagal'); let statusClass = trx.status === 'success' ? 'status-success' : (trx.status === 'pending' ? 'status-pending' : 'status-failed'); let priceFormatted = 'Rp ' + Number(trx.price).toLocaleString('id-ID');
+            html += `<a href="${detailUrl}${trx.id}" class="trx-card" data-status="${trx.status}" data-id="${trx.trx_id}"><div class="trx-body"><div class="trx-product">${trx.product_name}</div><div class="trx-target">${trx.target}</div><div class="trx-date local-time" data-utc="${trx.created_at}">...</div></div><div class="trx-right"><div class="trx-status ${statusClass}">${statusText}</div><div class="trx-price">${priceFormatted}</div></div></a>`;
+        });
+        trxList.innerHTML = html; applyFilters(); 
+    }
+
+    // SCROLL, NAV, & ANIMASI
+    function switchAkunTab(t) { document.querySelectorAll('.akun-tab').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.akun-pane').forEach(el=>el.classList.remove('active')); if(t==='menu'){document.querySelectorAll('.akun-tab')[0].classList.add('active');document.getElementById('akun-pane-menu').classList.add('active');}else{document.querySelectorAll('.akun-tab')[1].classList.add('active');document.getElementById('akun-pane-profil').classList.add('active');}}
+    function handleAkunScroll(el) { const sY = el.scrollTop; const p = document.getElementById('akunProfileCenter'); const m = document.getElementById('akunMiniBar'); if(p){ let op = 1-((sY-10)/70); p.style.opacity = op<0?0:(op>1?1:op); p.style.transform = `translateY(-${sY*0.4}px)`; } if(m){ let op = (sY-70)/50; m.style.opacity = op<0?0:(op>1?1:op); m.style.pointerEvents = op>0.5?'auto':'none'; } }
+    function copyToClipboard(t, m) { navigator.clipboard.writeText(t).then(()=>{showSuccessModal(m);}); }
+    function switchTab(tId, el) { document.querySelectorAll('.spa-section').forEach(s=>s.classList.remove('active')); document.getElementById(tId).classList.add('active'); window.location.hash = tId.replace('section-',''); document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active')); el.classList.add('active'); if(tId==='section-transaksi'){startTrxPolling();formatLocalTimes();}else{stopTrxPolling();} if(tId==='section-home'){startBalPolling();}else{stopBalPolling();} }
+    function restoreHash() { let h = window.location.hash.substring(1); let tId = h==='transaksi'?'section-transaksi':(h==='informasi'?'section-informasi':(h==='akun'?'section-akun':'section-home')); const nav = document.querySelector(`.nav-item[data-target="${tId}"]`); if(nav){ document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active')); nav.classList.add('active'); document.querySelectorAll('.spa-section').forEach(s=>s.classList.remove('active')); document.getElementById(tId).classList.add('active'); } }
+    
+    window.addEventListener('popstate', restoreHash);
+    window.addEventListener('DOMContentLoaded', ()=>{ initDashboard(); startBalPolling(); if(window.location.hash) restoreHash(); else { const hN=document.querySelector('.nav-item[data-target="section-home"]'); if(hN) switchTab('section-home', hN); } loadInfo(); });
+    
+    function formatLocalTimes() { document.querySelectorAll('.local-time').forEach(el=>{ let r = el.getAttribute('data-utc'); if(r && !el.classList.contains('formatted')){ el.innerText = new Date(r.replace(/-/g,'/')+' UTC').toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).replace(/\./g,':'); el.classList.add('formatted'); } }); document.querySelectorAll('.local-date-only').forEach(el=>{ let r = el.getAttribute('data-utc'); if(r && !el.classList.contains('formatted')){ el.innerText = new Date(r.replace(/-/g,'/')+' UTC').toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric'}); el.classList.add('formatted'); } }); }
+
+    // TRANSAKSI FILTER & POLLING
+    let curStatus = 'all'; function filterTrx(s, tb) { document.querySelectorAll('.transaksi-tab').forEach(t=>t.classList.remove('active')); tb.classList.add('active'); curStatus = s; applyFilters(); }
+    function applyFilters() { const kw = document.getElementById('searchTransaksiInput')?.value.toLowerCase().trim()||''; document.querySelectorAll('#trxList .trx-card').forEach(c=>{ const st = c.getAttribute('data-status'); const m1 = c.querySelector('.trx-product')?.innerText.toLowerCase().includes(kw); const m2 = c.querySelector('.trx-target')?.innerText.toLowerCase().includes(kw); const m3 = c.getAttribute('data-id').includes(kw); if((curStatus==='all'||st===curStatus) && (kw===''||m1||m2||m3)){ c.style.display='flex'; } else { c.style.display='none'; } }); }
+    document.getElementById('searchTransaksiInput')?.addEventListener('input', applyFilters);
+    
+    let trxPol=null; function startTrxPolling(){if(trxPol)clearInterval(trxPol);trxPol=setInterval(chkTrx,3000);} function stopTrxPolling(){if(trxPol){clearInterval(trxPol);trxPol=null;}}
+    async function chkTrx(){ const pc=document.querySelectorAll('.trx-card[data-status="pending"]'); if(pc.length===0){stopTrxPolling();return;} try{ const res=await fetch('https://curva.web.id/ppob/api/check_pending_transactions.php'); const dat=await res.json(); if(dat.status!=='success')return; dat.data.forEach(t=>{ const c=document.querySelector(`.trx-card[data-trxid="${t.trx_id}"]`); if(!c||c.dataset.status===t.status)return; c.dataset.status=t.status; const b=c.querySelector('.trx-status'); if(!b)return; b.className=`trx-status ${t.status==='success'?'status-success':(t.status==='failed'?'status-failed':'status-pending')}`; b.innerText=t.status==='success'?'Sukses':(t.status==='failed'?'Gagal':'Proses'); }); formatLocalTimes(); }catch(e){} }
+    
+    let balPol=null; function startBalPolling(){if(balPol)clearInterval(balPol);balPol=setInterval(updBal,5000);} function stopBalPolling(){if(balPol){clearInterval(balPol);balPol=null;}}
+    async function updBal(){ try{ const res=await fetch('https://curva.web.id/ppob/api/get_balance.php'); const dat=await res.json(); if(dat.status!=='success')return; const b='Rp '+Number(dat.saldo).toLocaleString('id-ID'); const el=document.getElementById('userBalance'); if(el&&el.innerText!==b){ el.innerText=b; document.getElementById('ui_saldo_menu').innerText=b; } }catch(e){} }
+
+    // INFO POLLING
+    let infoDat=[]; let infoPol=null;
+    async function loadInfo(){ if(infoDat.length>0)return; try{ const res=await fetch('https://curva.web.id/ppob/api/get_informations.php'); const dat=await res.json(); if(dat.status==='success'){ infoDat=dat.data||[]; renderInfo(infoDat); } }catch(e){} }
+    function renderInfo(d){ const c=document.getElementById('infoList'); c.innerHTML=''; d.forEach(i=>{ const dt=new Date(i.date); const fD=`${['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'][dt.getDay()]} • ${dt.getDate()} ${['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][dt.getMonth()]} ${dt.getFullYear()}`; let bC='badge-info',bI='campaign',bT='INFORMASI'; if(i.type==='promo'){bC='badge-promo';bI='local_offer';bT='PROMO';}else if(i.type==='warning'){bC='badge-warning';bI='warning';bT='PENTING';} let cT=''; i.content.split(/\n\n+/).forEach(p=>{if(p.trim())cT+=`<p>${p.replace(/\n/g,'<br>')}</p>`;}); c.innerHTML+=`<div class="info-card">${i.image_url?`<img src="${i.image_url}" class="info-image">`:''}<div class="info-badge ${bC}"><span class="material-symbols-rounded" style="font-size:12px;">${bI}</span><span>${bT}</span></div><div class="info-date"><span class="material-symbols-rounded">schedule</span><span>${fD}</span></div><div class="info-title">${i.title}</div><div class="info-content">${cT}</div></div>`; }); }
+
+    // LOGOUT & MODALS
+    window.addEventListener('load', ()=>{ if(localStorage.getItem('curva_app_lock')==='true') document.getElementById('toggleAppLock').checked=true; });
+    function switchAppLock(cb) { localStorage.setItem('curva_app_lock', cb.checked?'true':'false'); if(typeof Android!=='undefined') try{ prompt('AndroidBridge:setAppLock', cb.checked?'true':'false'); }catch(e){} showSuccessModal(cb.checked?'Kunci aplikasi diaktifkan.':'Kunci aplikasi dinonaktifkan.'); }
+    function showSuccessModal(m){ document.getElementById('successText').innerText=m; document.getElementById('successModal').classList.add('show'); }
+    function closeSuccessModal(){ document.getElementById('successModal').classList.remove('show'); }
+    function showLogoutModal(){ document.getElementById('logoutModal').classList.add('show'); }
+    function closeLogoutModal(){ document.getElementById('logoutModal').classList.remove('show'); }
+    
+    async function doLogout(){ 
+        // 1. Tembak logout.php di server secara senyap
+        try { await fetch('https://curva.web.id/ppob/auth/logout.php'); } catch(e) {}
+        // 2. Bersihkan memori HP
+        localStorage.clear(); sessionStorage.clear(); 
+        // 3. Kembali ke login lokal
+        window.location.replace('../auth/login.html'); 
+    }
+    
+    function bukaAplikasiLuar(url) { if(typeof Android!=='undefined') try{ prompt('AndroidBridge:openApp', url); }catch(e){ window.open(url, '_blank'); } else window.open(url, '_blank'); }
+</script>
+</body>
+</html>

@@ -269,11 +269,14 @@
 
     async function initDashboard() {
         try {
-            // URL ABSOLUT UNTUK API SERVER
-            const res = await fetch('https://curva.web.id/ppob/api/dashboard.php');
+            // [PENTING] Membawa Sesi ke API menggunakan credentials: 'include'
+            const res = await fetch('https://curva.web.id/ppob/api/dashboard.php', {
+                method: 'GET',
+                credentials: 'include' 
+            });
             const data = await res.json();
             
-            if (data.status === 'unauthorized') { window.location.href = '../auth/login.html'; return; }
+            if (data.status === 'unauthorized') { window.location.replace('../auth/login.html'); return; }
             if (data.user.require_pin) { window.location.href = 'https://curva.web.id/ppob/user/set_pin.php'; return; }
 
             document.getElementById('ui_header_nama').innerText = data.user.nama;
@@ -299,7 +302,7 @@
             document.getElementById('ui_prof_nama').innerText = data.user.nama; document.getElementById('ui_prof_email').innerText = data.user.email; document.getElementById('ui_prof_phone').innerText = data.user.no_hp; document.getElementById('ui_prof_gender').innerText = data.user.jenis_kelamin || 'Belum diatur'; document.getElementById('ui_prof_address').innerText = data.user.alamat || 'Belum diatur'; document.getElementById('ui_prof_join').setAttribute('data-utc', data.user.created_at);
             
             formatLocalTimes();
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error("Gagal inisialisasi:", e); }
     }
 
     function renderTransactionsHTML() {
@@ -319,22 +322,41 @@
     function copyToClipboard(t, m) { navigator.clipboard.writeText(t).then(()=>{showSuccessModal(m);}); }
     function switchTab(tId, el) { document.querySelectorAll('.spa-section').forEach(s=>s.classList.remove('active')); document.getElementById(tId).classList.add('active'); window.location.hash = tId.replace('section-',''); document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active')); el.classList.add('active'); if(tId==='section-transaksi'){startTrxPolling();formatLocalTimes();}else{stopTrxPolling();} if(tId==='section-home'){startBalPolling();}else{stopBalPolling();} }
     function restoreHash() { let h = window.location.hash.substring(1); let tId = h==='transaksi'?'section-transaksi':(h==='informasi'?'section-informasi':(h==='akun'?'section-akun':'section-home')); const nav = document.querySelector(`.nav-item[data-target="${tId}"]`); if(nav){ document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active')); nav.classList.add('active'); document.querySelectorAll('.spa-section').forEach(s=>s.classList.remove('active')); document.getElementById(tId).classList.add('active'); } }
-    
+
     window.addEventListener('popstate', restoreHash);
     window.addEventListener('DOMContentLoaded', ()=>{ initDashboard(); startBalPolling(); if(window.location.hash) restoreHash(); else { const hN=document.querySelector('.nav-item[data-target="section-home"]'); if(hN) switchTab('section-home', hN); } loadInfo(); });
-    
+
     function formatLocalTimes() { document.querySelectorAll('.local-time').forEach(el=>{ let r = el.getAttribute('data-utc'); if(r && !el.classList.contains('formatted')){ el.innerText = new Date(r.replace(/-/g,'/')+' UTC').toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).replace(/\./g,':'); el.classList.add('formatted'); } }); document.querySelectorAll('.local-date-only').forEach(el=>{ let r = el.getAttribute('data-utc'); if(r && !el.classList.contains('formatted')){ el.innerText = new Date(r.replace(/-/g,'/')+' UTC').toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric'}); el.classList.add('formatted'); } }); }
 
     // TRANSAKSI FILTER & POLLING
     let curStatus = 'all'; function filterTrx(s, tb) { document.querySelectorAll('.transaksi-tab').forEach(t=>t.classList.remove('active')); tb.classList.add('active'); curStatus = s; applyFilters(); }
     function applyFilters() { const kw = document.getElementById('searchTransaksiInput')?.value.toLowerCase().trim()||''; document.querySelectorAll('#trxList .trx-card').forEach(c=>{ const st = c.getAttribute('data-status'); const m1 = c.querySelector('.trx-product')?.innerText.toLowerCase().includes(kw); const m2 = c.querySelector('.trx-target')?.innerText.toLowerCase().includes(kw); const m3 = c.getAttribute('data-id').includes(kw); if((curStatus==='all'||st===curStatus) && (kw===''||m1||m2||m3)){ c.style.display='flex'; } else { c.style.display='none'; } }); }
     document.getElementById('searchTransaksiInput')?.addEventListener('input', applyFilters);
-    
+
     let trxPol=null; function startTrxPolling(){if(trxPol)clearInterval(trxPol);trxPol=setInterval(chkTrx,3000);} function stopTrxPolling(){if(trxPol){clearInterval(trxPol);trxPol=null;}}
-    async function chkTrx(){ const pc=document.querySelectorAll('.trx-card[data-status="pending"]'); if(pc.length===0){stopTrxPolling();return;} try{ const res=await fetch('https://curva.web.id/ppob/api/check_pending_transactions.php'); const dat=await res.json(); if(dat.status!=='success')return; dat.data.forEach(t=>{ const c=document.querySelector(`.trx-card[data-trxid="${t.trx_id}"]`); if(!c||c.dataset.status===t.status)return; c.dataset.status=t.status; const b=c.querySelector('.trx-status'); if(!b)return; b.className=`trx-status ${t.status==='success'?'status-success':(t.status==='failed'?'status-failed':'status-pending')}`; b.innerText=t.status==='success'?'Sukses':(t.status==='failed'?'Gagal':'Proses'); }); formatLocalTimes(); }catch(e){} }
-    
+    async function chkTrx(){ 
+        const pc=document.querySelectorAll('.trx-card[data-status="pending"]'); if(pc.length===0){stopTrxPolling();return;} 
+        try{ 
+            // [PERBAIKAN] Tambahkan credentials: 'include' untuk polling transaksi
+            const res=await fetch('https://curva.web.id/ppob/api/check_pending_transactions.php', { credentials: 'include' }); 
+            const dat=await res.json(); 
+            if(dat.status!=='success')return; 
+            dat.data.forEach(t=>{ const c=document.querySelector(`.trx-card[data-trxid="${t.trx_id}"]`); if(!c||c.dataset.status===t.status)return; c.dataset.status=t.status; const b=c.querySelector('.trx-status'); if(!b)return; b.className=`trx-status ${t.status==='success'?'status-success':(t.status==='failed'?'status-failed':'status-pending')}`; b.innerText=t.status==='success'?'Sukses':(t.status==='failed'?'Gagal':'Proses'); }); 
+            formatLocalTimes(); 
+        }catch(e){} 
+    }
+
     let balPol=null; function startBalPolling(){if(balPol)clearInterval(balPol);balPol=setInterval(updBal,5000);} function stopBalPolling(){if(balPol){clearInterval(balPol);balPol=null;}}
-    async function updBal(){ try{ const res=await fetch('https://curva.web.id/ppob/api/get_balance.php'); const dat=await res.json(); if(dat.status!=='success')return; const b='Rp '+Number(dat.saldo).toLocaleString('id-ID'); const el=document.getElementById('userBalance'); if(el&&el.innerText!==b){ el.innerText=b; document.getElementById('ui_saldo_menu').innerText=b; } }catch(e){} }
+    async function updBal(){ 
+        try{ 
+            // [PERBAIKAN] Tambahkan credentials: 'include' untuk polling saldo
+            const res=await fetch('https://curva.web.id/ppob/api/get_balance.php', { credentials: 'include' }); 
+            const dat=await res.json(); 
+            if(dat.status!=='success')return; 
+            const b='Rp '+Number(dat.saldo).toLocaleString('id-ID'); const el=document.getElementById('userBalance'); 
+            if(el&&el.innerText!==b){ el.innerText=b; document.getElementById('ui_saldo_menu').innerText=b; } 
+        }catch(e){} 
+    }
 
     // INFO POLLING
     let infoDat=[]; let infoPol=null;
@@ -348,16 +370,16 @@
     function closeSuccessModal(){ document.getElementById('successModal').classList.remove('show'); }
     function showLogoutModal(){ document.getElementById('logoutModal').classList.add('show'); }
     function closeLogoutModal(){ document.getElementById('logoutModal').classList.remove('show'); }
-    
+
     async function doLogout(){ 
-        // 1. Tembak logout.php di server secara senyap
-        try { await fetch('https://curva.web.id/ppob/auth/logout.php'); } catch(e) {}
-        // 2. Bersihkan memori HP
+        try { 
+            // [PERBAIKAN] Tambahkan credentials: 'include' untuk menghancurkan sesi di server
+            await fetch('https://curva.web.id/ppob/auth/logout.php', { credentials: 'include' }); 
+        } catch(e) {}
         localStorage.clear(); sessionStorage.clear(); 
-        // 3. Kembali ke login lokal
         window.location.replace('../auth/login.html'); 
     }
-    
+
     function bukaAplikasiLuar(url) { if(typeof Android!=='undefined') try{ prompt('AndroidBridge:openApp', url); }catch(e){ window.open(url, '_blank'); } else window.open(url, '_blank'); }
 </script>
 </body>

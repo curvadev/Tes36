@@ -6,73 +6,56 @@
     <title>Memuat - Curva Payment</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-        body { 
-            background: #1791f4; /* Warna biru tema aplikasi Anda */
-            display: flex; 
-            flex-direction: column;
-            align-items: center; 
-            justify-content: center; 
-            height: 100vh; 
-            color: white;
-        }
-        .spinner { 
-            width: 40px; 
-            height: 40px; 
-            border: 4px solid rgba(255,255,255,0.3); 
-            border-top: 4px solid white; 
-            border-radius: 50%; 
-            animation: spin 1s linear infinite; 
-            margin-bottom: 20px;
-        }
-        .status-text {
-            font-size: 14px;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-            animation: pulse 1.5s infinite;
-        }
+        body { background: #1791f4; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: white; padding: 20px; text-align: center;}
+        .spinner { width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.3); border-top: 4px solid white; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        .status-text { font-size: 14px; font-weight: 600; letter-spacing: 0.5px; animation: pulse 1.5s infinite; word-wrap: break-word; }
+        .btn-retry { margin-top: 20px; padding: 10px 24px; border: 2px solid white; background: transparent; color: white; border-radius: 12px; font-weight: bold; cursor: pointer; display: none; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     </style>
 </head>
 <body>
-
-    <!-- Animasi Loading saat mengecek Sesi secara online -->
-    <div class="spinner"></div>
+    <div class="spinner" id="spinner"></div>
     <div class="status-text" id="statusText">Menyiapkan Aplikasi...</div>
+    <button class="btn-retry" id="btnRetry" onclick="location.reload()">Coba Lagi</button>
 
     <script>
         async function checkSession() {
             try {
-                // Tembak API Dashboard di server secara diam-diam untuk mengecek Sesi
-                // WAJIB pakai credentials: 'include' agar Sesi (Cookie) dikirim ke server
                 const response = await fetch('https://curva.web.id/ppob/api/dashboard.php', {
                     method: 'GET',
                     credentials: 'include' 
                 });
                 
-                const data = await response.json();
-
-                if (data.status === 'success') {
-                    // Jika Server membalas "Sukses", meluncur ke Dashboard lokal
-                    window.location.replace('user/dashboard.html');
-                } else {
-                    // Jika Server membalas "Sesi kosong / unauthorized", arahkan ke Login lokal
-                    window.location.replace('auth/login.html');
+                // Cek apakah server membalas dengan error PHP alih-alih data JSON
+                const text = await response.text();
+                try {
+                    const data = JSON.parse(text);
+                    if (data.status === 'success') {
+                        window.location.replace('user/dashboard.html');
+                    } else {
+                        window.location.replace('auth/login.html');
+                    }
+                } catch (jsonError) {
+                    // Jika data rusak (bukan JSON), tampilkan pesan error dari server
+                    tampilkanError("Server merespons tidak valid. (PHP Error)");
+                    console.log("Response aslinya: ", text);
                 }
+
             } catch (error) {
-                // Jika sedang tidak ada sinyal internet, jangan tampilkan error jelek, 
-                // tapi coba lagi otomatis setiap 3 detik.
-                document.getElementById('statusText').innerText = "Menunggu jaringan...";
-                document.getElementById('statusText').style.animation = "none";
-                
-                setTimeout(checkSession, 3000);
+                // Jika murni masalah jaringan atau CORS diblokir
+                tampilkanError("Gagal mengambil data: " + error.message);
             }
         }
         
-        // Mulai pengecekan setelah 0.5 detik agar transisi dari splash screen Android terasa smooth
-        window.addEventListener('load', () => {
-            setTimeout(checkSession, 500);
-        });
+        function tampilkanError(pesan) {
+            document.getElementById('statusText').innerText = pesan;
+            document.getElementById('statusText').style.animation = "none";
+            document.getElementById('spinner').style.display = "none";
+            document.getElementById('btnRetry').style.display = "block";
+        }
+
+        window.addEventListener('load', () => { setTimeout(checkSession, 500); });
     </script>
 </body>
 </html>

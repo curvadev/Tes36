@@ -68,7 +68,7 @@
 
                 <div class="options-row">
                     <div></div>
-                    <a href="forgot_password.html" class="forgot-password">Lupa Sandi?</a>
+                    <a href="https://curva.web.id/ppob/auth/forgot_password.html" class="forgot-password">Lupa Sandi?</a>
                 </div>
 
                 <button type="submit" class="btn-submit" id="btnSubmit">Masuk <span class="material-symbols-rounded">arrow_forward</span></button>
@@ -114,7 +114,7 @@
                 if (data.success) {
                     // Simpan email sementara untuk halaman verifikasi
                     localStorage.setItem('temp_email', data.email);
-                    window.location.href = "verify.html?type=" + data.type;
+                    window.location.href = "https://curva.web.id/ppib/auth/verify.html?type=" + data.type;
                 } else {
                     alertMsg.textContent = data.message;
                     alertBox.classList.add('show');

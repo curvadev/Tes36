@@ -63,7 +63,6 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Set;
 import java.util.UUID;
 
@@ -86,12 +85,11 @@ public class MainActivity extends Activity {
     private static final int REQUEST_APP_LOCK = 9999; 
 
     private boolean isAppUnlocked = false; 
-    
-    // Variabel untuk mencegah keluar aplikasi secara tidak sengaja
     private boolean doubleBackToExitPressedOnce = false;
 
-    private final String BASE_URL = "https://curva.web.id/ppob/";
-    private final String HOME_URL = BASE_URL + "index.php";
+    // URL HYBRID LOKAL
+    private final String BASE_URL = "https://curva.web.id/ppob/"; 
+    private final String HOME_URL = "file:///android_asset/index.html"; 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -100,8 +98,6 @@ public class MainActivity extends Activity {
         setStatusBarColor("#f5f5f5");
 
         FrameLayout root = new FrameLayout(this);
-        
-        // PERBAIKAN HEADER STATUS BAR
         root.setFitsSystemWindows(true);
         root.setBackgroundColor(Color.parseColor("#1791f4")); 
 
@@ -192,31 +188,11 @@ public class MainActivity extends Activity {
                 injectAndroidBridge(); 
                 sendFcmTokenToWeb(); 
             }
-            @SuppressWarnings("deprecation") 
-            @Override 
-            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) { 
-                if (isMaintenanceTime()) { showMaintenanceScreen(view); } else { showOfflineScreen(view); } 
-            }
-            @TargetApi(Build.VERSION_CODES.M) 
-            @Override 
-            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) { 
-                if (request.isForMainFrame()) { if (isMaintenanceTime()) showMaintenanceScreen(view); else showOfflineScreen(view); } 
-            }
-            @TargetApi(Build.VERSION_CODES.LOLLIPOP) 
-            @Override 
-            public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) { 
-                if (request.isForMainFrame()) { if (errorResponse.getStatusCode() >= 500) { if (isMaintenanceTime()) showMaintenanceScreen(view); else showOfflineScreen(view); } } 
-            }
         });
 
+        // Pemuatan Halaman Hybrid (Langsung load aset lokal tanpa memikirkan koneksi, JS yang akan mengurus koneksi API)
         String initialUrl = handleDeepLink(getIntent());
-        if (isMaintenanceTime()) { 
-            showMaintenanceScreen(webView); 
-        } else if (isNetworkAvailable()) { 
-            webView.loadUrl(initialUrl); 
-        } else { 
-            showOfflineScreen(webView); 
-        }
+        webView.loadUrl(initialUrl);
 
         splashHandler.postDelayed(new Runnable() { 
             @Override public void run() { triggerNativeAppLock(); } 
@@ -224,13 +200,13 @@ public class MainActivity extends Activity {
     }
 
     // =========================================================================
-    // FITUR BARU: SMART BACK BUTTON (Mencegah Keluar Paksa via Gesture Back)
+    // SMART BACK BUTTON (Mencegah Keluar Paksa via Gesture Back)
     // =========================================================================
     @Override
     public boolean onKeyDown(int keyCode, android.view.KeyEvent event) {
         if (event.getAction() == android.view.KeyEvent.ACTION_DOWN && keyCode == android.view.KeyEvent.KEYCODE_BACK) {
             handleCustomBack();
-            return true; // Cegat tombol fisik/gesture agar tidak mematikan Activity
+            return true; 
         }
         return super.onKeyDown(keyCode, event);
     }
@@ -242,8 +218,6 @@ public class MainActivity extends Activity {
 
     private void handleCustomBack() {
         if (webView != null) {
-            // Skrip JS Pintar: Periksa apakah ada Bottom Sheet / Popup yang sedang terbuka (class '.show')
-            // Jika ada, tutup popup tersebut alih-alih berpindah halaman.
             webView.evaluateJavascript(
                 "javascript:(function() {" +
                 "   var handled = false;" +
@@ -256,13 +230,10 @@ public class MainActivity extends Activity {
                 "})()", new ValueCallback<String>() {
                     @Override
                     public void onReceiveValue(String value) {
-                        // Jika JS mengembalikan "true", berarti popup berhasil ditutup, batalkan goBack
                         if (!"\"true\"".equals(value) && !"true".equals(value)) {
-                            // Jika tidak ada popup, periksa apakah WebView bisa kembali ke menu sebelumnya
                             if (webView.canGoBack()) {
                                 webView.goBack();
                             } else {
-                                // Jika halaman sudah mentok (Dashboard), minta konfirmasi keluar
                                 performDoubleBackToExit();
                             }
                         }
@@ -497,25 +468,6 @@ public class MainActivity extends Activity {
         dialog.show();
     }
 
-    private boolean isMaintenanceTime() {
-        Calendar calendar = Calendar.getInstance(); 
-        int hour = calendar.get(Calendar.HOUR_OF_DAY); 
-        int minute = calendar.get(Calendar.MINUTE);
-        if (hour == 23 && minute >= 30) { return true; } 
-        else if (hour == 0 && minute <= 10) { return true; } 
-        return false;
-    }
-
-    private void showMaintenanceScreen(WebView view) {
-        String maintenanceHtml = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"></head><body style=\"display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;margin:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-align:center;padding:20px;\"><h2 style=\"color:#1e293b;margin:0 0 12px;font-size:24px;font-weight:800;\">Sistem Maintenance</h2><button onclick=\"prompt('AndroidBridge:checkMaintenance', '')\" style=\"background:#1791f4;color:#fff;border:none;padding:16px 32px;border-radius:16px;font-size:16px;font-weight:bold;cursor:pointer;width:100%;max-width:280px;\">Cek Kembali Akses</button></body></html>";
-        view.loadDataWithBaseURL(null, maintenanceHtml, "text/html", "UTF-8", null);
-    }
-
-    private void showOfflineScreen(WebView view) {
-        String offlineHtml = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"></head><body style=\"display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;margin:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-align:center;padding:20px;\"><h2 style=\"color:#1e293b;margin:0 0 10px;font-size:22px;font-weight:800;\">Koneksi Terputus</h2><button onclick=\"prompt('AndroidBridge:retryConnection', '')\" style=\"background:#1791f4;color:#fff;border:none;padding:14px 32px;border-radius:16px;font-size:16px;font-weight:bold;cursor:pointer;width:100%;max-width:250px;\">Coba Lagi</button></body></html>";
-        view.loadDataWithBaseURL(null, offlineHtml, "text/html", "UTF-8", null);
-    }
-
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent); 
@@ -523,13 +475,7 @@ public class MainActivity extends Activity {
         if (intent != null && intent.getExtras() != null) {
             String newUrl = handleDeepLink(intent);
             if (!newUrl.equals(HOME_URL)) { 
-                if (isMaintenanceTime()) { 
-                    showMaintenanceScreen(webView); 
-                } else if (isNetworkAvailable()) { 
-                    webView.loadUrl(newUrl); 
-                } else { 
-                    showOfflineScreen(webView); 
-                } 
+                webView.loadUrl(newUrl); 
             }
         }
     }
@@ -553,7 +499,7 @@ public class MainActivity extends Activity {
             } else if (intent.hasExtra("target_url")) {
                 String target = intent.getStringExtra("target_url");
                 if (target != null && !target.isEmpty()) { 
-                    if (target.startsWith("http")) { 
+                    if (target.startsWith("http") || target.startsWith("file://")) { 
                         urlToLoad = target; 
                     } else { 
                         if (target.startsWith("/")) { 
@@ -628,17 +574,7 @@ public class MainActivity extends Activity {
             else if (action.equals("retryConnection")) {
                 runOnUiThread(new Runnable() {
                     @Override public void run() {
-                        if (isMaintenanceTime()) { showMaintenanceScreen(webView); } else if (isNetworkAvailable()) { webView.loadUrl(HOME_URL); } else { showToast("Koneksi internet masih terputus."); }
-                    }
-                });
-                result.confirm(""); return true; 
-            }
-            else if (action.equals("checkMaintenance")) {
-                runOnUiThread(new Runnable() {
-                    @Override public void run() {
-                        if (isMaintenanceTime()) { showToast("Sistem masih dalam mode pemeliharaan."); } else {
-                            if (isNetworkAvailable()) { webView.loadUrl(HOME_URL); } else { showOfflineScreen(webView); }
-                        }
+                        webView.loadUrl(HOME_URL);
                     }
                 });
                 result.confirm(""); return true; 
@@ -925,15 +861,22 @@ public class MainActivity extends Activity {
     }
 
     // ============================================
-    // FUNGSI SETUP WEBVIEW
+    // PENGATURAN WEBVIEW HYBRID
     // ============================================
     private void setupWebView() {
         WebSettings settings = webView.getSettings(); 
         settings.setJavaScriptEnabled(true); 
         settings.setDomStorageEnabled(true); 
         settings.setDatabaseEnabled(true); 
+        
+        // PENGATURAN AKSES LOKAL & CORS
         settings.setAllowFileAccess(true); 
         settings.setAllowContentAccess(true); 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+            settings.setAllowFileAccessFromFileURLs(true);
+            settings.setAllowUniversalAccessFromFileURLs(true);
+        }
+
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER); 
         settings.setAppCacheEnabled(true); 
         settings.setAppCachePath(getApplicationContext().getCacheDir().getAbsolutePath()); 
@@ -1065,11 +1008,6 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) { Window window = getWindow(); window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS); window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS); window.setStatusBarColor(Color.parseColor(color)); window.getDecorView().setSystemUiVisibility(0); }
     }
 
-    private boolean isNetworkAvailable() {
-        ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        if (connectivityManager != null) { NetworkInfo activeNetworkInfo = connectivityManager.getActiveNetworkInfo(); return activeNetworkInfo != null && activeNetworkInfo.isConnected(); } return false;
-    }
-
     private void setupCookies() { CookieManager cookieManager = CookieManager.getInstance(); cookieManager.setAcceptCookie(true); if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) { cookieManager.setAcceptThirdPartyCookies(webView, true); } }
     private void saveCookies() { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) { CookieManager.getInstance().flush(); } }
 
@@ -1086,7 +1024,16 @@ public class MainActivity extends Activity {
         if (fcmToken == null || fcmToken.equals("")) { loadFcmToken(); } if (fcmToken == null || fcmToken.equals("")) { return; }
         try {
             String token = java.net.URLEncoder.encode(fcmToken, "UTF-8"); String device = java.net.URLEncoder.encode("Android WebView", "UTF-8");
-            final String js = "javascript:(function(){" + "try{var xhr=new XMLHttpRequest(); xhr.open('POST','" + BASE_URL + "api/save_fcm_token.php',true);" + "xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded'); xhr.send('token=" + token + "&device_name=" + device + "');}catch(e){}" + "})()";
+            
+            // PENTING UNTUK HYBRID: Menambahkan xhr.withCredentials = true; agar Sesi terbaca
+            final String js = "javascript:(function(){" + 
+                "try{var xhr=new XMLHttpRequest(); " +
+                "xhr.withCredentials = true; " + 
+                "xhr.open('POST','" + BASE_URL + "api/save_fcm_token.php',true);" + 
+                "xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded'); " + 
+                "xhr.send('token=" + token + "&device_name=" + device + "');}catch(e){}" + 
+                "})()";
+            
             webView.post(new Runnable() { @Override public void run() { webView.evaluateJavascript(js, null); } });
         } catch (Exception e) { e.printStackTrace(); }
     }

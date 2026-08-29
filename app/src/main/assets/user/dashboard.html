@@ -270,17 +270,18 @@
     // ==========================================
     // PENGATURAN HEADER TOKEN HYBRID
     // ==========================================
-    // Header ini akan disertakan di setiap request fetch
-    const reqHeaders = {
-        'Hybrid-Token': localStorage.getItem('hybrid_token') || ''
-    };
+    function getReqHeaders() {
+        return {
+            'Hybrid-Token': localStorage.getItem('hybrid_token') || ''
+        };
+    }
 
     async function initDashboard() {
         try {
             const res = await fetch('https://curva.web.id/ppob/api/dashboard.php', {
                 method: 'GET',
                 credentials: 'include',
-                headers: reqHeaders 
+                headers: getReqHeaders()
             });
             const data = await res.json();
             
@@ -345,7 +346,7 @@
     async function chkTrx(){ 
         const pc=document.querySelectorAll('.trx-card[data-status="pending"]'); if(pc.length===0){stopTrxPolling();return;} 
         try{ 
-            const res=await fetch('https://curva.web.id/ppob/api/check_pending_transactions.php', { credentials: 'include', headers: reqHeaders }); 
+            const res=await fetch('https://curva.web.id/ppob/api/check_pending_transactions.php', { credentials: 'include', headers: getReqHeaders() }); 
             const dat=await res.json(); 
             if(dat.status!=='success')return; 
             dat.data.forEach(t=>{ const c=document.querySelector(`.trx-card[data-trxid="${t.trx_id}"]`); if(!c||c.dataset.status===t.status)return; c.dataset.status=t.status; const b=c.querySelector('.trx-status'); if(!b)return; b.className=`trx-status ${t.status==='success'?'status-success':(t.status==='failed'?'status-failed':'status-pending')}`; b.innerText=t.status==='success'?'Sukses':(t.status==='failed'?'Gagal':'Proses'); }); 
@@ -356,7 +357,7 @@
     let balPol=null; function startBalPolling(){if(balPol)clearInterval(balPol);balPol=setInterval(updBal,5000);} function stopBalPolling(){if(balPol){clearInterval(balPol);balPol=null;}}
     async function updBal(){ 
         try{ 
-            const res=await fetch('https://curva.web.id/ppob/api/get_balance.php', { credentials: 'include', headers: reqHeaders }); 
+            const res=await fetch('https://curva.web.id/ppob/api/get_balance.php', { credentials: 'include', headers: getReqHeaders() }); 
             const dat=await res.json(); 
             if(dat.status!=='success')return; 
             const b='Rp '+Number(dat.saldo).toLocaleString('id-ID'); const el=document.getElementById('userBalance'); 
@@ -366,7 +367,7 @@
 
     // INFO POLLING
     let infoDat=[]; let infoPol=null;
-    async function loadInfo(){ if(infoDat.length>0)return; try{ const res=await fetch('https://curva.web.id/ppob/api/get_informations.php', { headers: reqHeaders }); const dat=await res.json(); if(dat.status==='success'){ infoDat=dat.data||[]; renderInfo(infoDat); } }catch(e){} }
+    async function loadInfo(){ if(infoDat.length>0)return; try{ const res=await fetch('https://curva.web.id/ppob/api/get_informations.php', { headers: getReqHeaders() }); const dat=await res.json(); if(dat.status==='success'){ infoDat=dat.data||[]; renderInfo(infoDat); } }catch(e){} }
     function renderInfo(d){ const c=document.getElementById('infoList'); c.innerHTML=''; d.forEach(i=>{ const dt=new Date(i.date); const fD=`${['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'][dt.getDay()]} • ${dt.getDate()} ${['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][dt.getMonth()]} ${dt.getFullYear()}`; let bC='badge-info',bI='campaign',bT='INFORMASI'; if(i.type==='promo'){bC='badge-promo';bI='local_offer';bT='PROMO';}else if(i.type==='warning'){bC='badge-warning';bI='warning';bT='PENTING';} let cT=''; i.content.split(/\n\n+/).forEach(p=>{if(p.trim())cT+=`<p>${p.replace(/\n/g,'<br>')}</p>`;}); c.innerHTML+=`<div class="info-card">${i.image_url?`<img src="${i.image_url}" class="info-image">`:''}<div class="info-badge ${bC}"><span class="material-symbols-rounded" style="font-size:12px;">${bI}</span><span>${bT}</span></div><div class="info-date"><span class="material-symbols-rounded">schedule</span><span>${fD}</span></div><div class="info-title">${i.title}</div><div class="info-content">${cT}</div></div>`; }); }
 
     // LOGOUT & MODALS
@@ -379,7 +380,7 @@
 
     async function doLogout(){ 
         try { 
-            await fetch('https://curva.web.id/ppob/auth/logout.php', { credentials: 'include', headers: reqHeaders }); 
+            await fetch('https://curva.web.id/ppob/auth/logout.php', { credentials: 'include', headers: getReqHeaders() }); 
         } catch(e) {}
         localStorage.clear(); sessionStorage.clear(); 
         window.location.replace('../auth/login.html'); 

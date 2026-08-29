@@ -18,8 +18,6 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -190,7 +188,7 @@ public class MainActivity extends Activity {
             }
         });
 
-        // Pemuatan Halaman Hybrid (Langsung load aset lokal tanpa memikirkan koneksi, JS yang akan mengurus koneksi API)
+        // Memuat Halaman Hybrid (Langsung load aset lokal)
         String initialUrl = handleDeepLink(getIntent());
         webView.loadUrl(initialUrl);
 
@@ -1021,17 +1019,24 @@ public class MainActivity extends Activity {
     }
 
     public void sendFcmTokenToWeb() {
-        if (fcmToken == null || fcmToken.equals("")) { loadFcmToken(); } if (fcmToken == null || fcmToken.equals("")) { return; }
+        if (fcmToken == null || fcmToken.equals("")) { loadFcmToken(); } 
+        if (fcmToken == null || fcmToken.equals("")) { return; }
+        
         try {
-            String token = java.net.URLEncoder.encode(fcmToken, "UTF-8"); String device = java.net.URLEncoder.encode("Android WebView", "UTF-8");
+            String token = java.net.URLEncoder.encode(fcmToken, "UTF-8"); 
+            String device = java.net.URLEncoder.encode("Android WebView", "UTF-8");
             
-            // PENTING UNTUK HYBRID: Menambahkan xhr.withCredentials = true; agar Sesi terbaca
+            // PERBAIKAN HYBRID FCM: Mengirimkan Hybrid-Token ke Server
             final String js = "javascript:(function(){" + 
-                "try{var xhr=new XMLHttpRequest(); " +
+                "try{" +
+                "var hybridToken = localStorage.getItem('hybrid_token') || '';" +
+                "var xhr=new XMLHttpRequest(); " +
                 "xhr.withCredentials = true; " + 
                 "xhr.open('POST','" + BASE_URL + "api/save_fcm_token.php',true);" + 
                 "xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded'); " + 
-                "xhr.send('token=" + token + "&device_name=" + device + "');}catch(e){}" + 
+                "xhr.setRequestHeader('Hybrid-Token', hybridToken); " + 
+                "xhr.send('token=" + token + "&device_name=" + device + "');" +
+                "}catch(e){}" + 
                 "})()";
             
             webView.post(new Runnable() { @Override public void run() { webView.evaluateJavascript(js, null); } });

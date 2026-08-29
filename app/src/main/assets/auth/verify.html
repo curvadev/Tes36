@@ -119,6 +119,14 @@
                 
                 const bridgeData = await bridgeRes.json();
                 if (bridgeData.success) {
+                    
+                    // ==========================================
+                    // SIMPAN TOKEN HYBRID UNTUK MENCEGAH LOOPING
+                    // ==========================================
+                    if (bridgeData.hybrid_token) {
+                        localStorage.setItem('hybrid_token', bridgeData.hybrid_token);
+                    }
+                    
                     // Meluncur ke Dashboard LOKAL
                     window.location.replace('../user/dashboard.html');
                 } else {

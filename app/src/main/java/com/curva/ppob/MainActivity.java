@@ -18,6 +18,7 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.graphics.PorterDuff;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
@@ -37,12 +38,14 @@ import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -91,7 +94,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setStatusBarColor("#f5f5f5");
+        
+        // Buat Status Bar hitam saat Splash Screen (Agar cocok dengan gambar desain warna apapun)
+        setStatusBarColor("#000000");
 
         FrameLayout root = new FrameLayout(this);
         root.setFitsSystemWindows(true);
@@ -102,33 +107,59 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT, 
                 FrameLayout.LayoutParams.MATCH_PARENT));
 
+        // =======================================================
+        // DESAIN SPLASH SCREEN BARU (FULL SCREEN POSTER + LOADING)
+        // =======================================================
         splash = new RelativeLayout(this);
-        splash.setBackgroundColor(Color.parseColor("#f5f5f5"));
+        splash.setBackgroundColor(Color.parseColor("#1e293b")); // Warna dasar gelap
         splash.setClickable(true); 
         splash.setFocusable(true);
 
-        LinearLayout centerWrap = new LinearLayout(this);
-        centerWrap.setOrientation(LinearLayout.VERTICAL);
-        centerWrap.setGravity(Gravity.CENTER);
-        RelativeLayout.LayoutParams centerParams = new RelativeLayout.LayoutParams(
-                RelativeLayout.LayoutParams.WRAP_CONTENT, 
-                RelativeLayout.LayoutParams.WRAP_CONTENT);
-        centerParams.addRule(RelativeLayout.CENTER_IN_PARENT);
-        centerParams.bottomMargin = (int) (80 * getResources().getDisplayMetrics().density);
-        splash.addView(centerWrap, centerParams);
+        // 1. Gambar Full Screen
+        ImageView bgImage = new ImageView(this);
+        bgImage.setImageResource(getResources().getIdentifier("splash_logo", "drawable", getPackageName()));
+        // CENTER_CROP membuat gambar memenuhi seluruh layar seperti Poster
+        bgImage.setScaleType(ImageView.ScaleType.CENTER_CROP); 
+        splash.addView(bgImage, new RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.MATCH_PARENT, 
+                RelativeLayout.LayoutParams.MATCH_PARENT));
 
-        ImageView logo = new ImageView(this);
-        logo.setImageResource(getResources().getIdentifier("splash_logo", "drawable", getPackageName()));
-        logo.setScaleType(ImageView.ScaleType.FIT_CENTER); 
-        logo.setAdjustViewBounds(true);
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) { 
-            logo.setElevation(8f); 
+        // 2. Wadah Bawah untuk Loading & Versi
+        LinearLayout bottomLayout = new LinearLayout(this);
+        bottomLayout.setOrientation(LinearLayout.VERTICAL);
+        bottomLayout.setGravity(Gravity.CENTER);
+        RelativeLayout.LayoutParams bottomParams = new RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.MATCH_PARENT, 
+                RelativeLayout.LayoutParams.WRAP_CONTENT);
+        bottomParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+        // Jarak dari bawah layar
+        bottomParams.bottomMargin = (int) (40 * getResources().getDisplayMetrics().density);
+        splash.addView(bottomLayout, bottomParams);
+
+        // 3. Baris Indikator Loading (Spinner + Teks)
+        LinearLayout loadingRow = new LinearLayout(this);
+        loadingRow.setOrientation(LinearLayout.HORIZONTAL);
+        loadingRow.setGravity(Gravity.CENTER);
+
+        ProgressBar spinner = new ProgressBar(this, null, android.R.attr.progressBarStyleSmall);
+        // Ubah warna spinner lingkaran menjadi putih
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            spinner.getIndeterminateDrawable().setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
         }
 
-        int logoWidth = (int) (260 * getResources().getDisplayMetrics().density);
-        centerWrap.addView(logo, new LinearLayout.LayoutParams(logoWidth, LinearLayout.LayoutParams.WRAP_CONTENT));
+        TextView loadingText = new TextView(this);
+        loadingText.setText("Loading...");
+        loadingText.setTextColor(Color.WHITE);
+        loadingText.setTextSize(14);
+        loadingText.setPadding(20, 0, 0, 0); // Jarak antara lingkaran dan teks
+        // Tambahkan bayangan tipis pada teks agar tetap terbaca jika background terang
+        loadingText.setShadowLayer(3, 1, 1, Color.parseColor("#80000000"));
 
+        loadingRow.addView(spinner);
+        loadingRow.addView(loadingText);
+        bottomLayout.addView(loadingRow);
+
+        // 4. Teks Versi Aplikasi
         String appVersion = "1.0.0";
         try { 
             PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0); 
@@ -136,22 +167,23 @@ public class MainActivity extends Activity {
         } catch (Exception e) {}
 
         TextView version = new TextView(this);
-        version.setText("Version " + appVersion); 
-        version.setTextColor(Color.GRAY); 
-        version.setTextSize(12);
+        version.setText("Versi " + appVersion); 
+        version.setTextColor(Color.parseColor("#EEEEEE")); 
+        version.setTextSize(11);
+        version.setShadowLayer(3, 1, 1, Color.parseColor("#80000000"));
         
-        RelativeLayout.LayoutParams versionParams = new RelativeLayout.LayoutParams(
-                RelativeLayout.LayoutParams.WRAP_CONTENT, 
-                RelativeLayout.LayoutParams.WRAP_CONTENT);
-        versionParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM); 
-        versionParams.addRule(RelativeLayout.CENTER_HORIZONTAL);
-        versionParams.bottomMargin = (int) (40 * getResources().getDisplayMetrics().density);
-        splash.addView(version, versionParams);
+        LinearLayout.LayoutParams vParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, 
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        vParams.topMargin = (int) (12 * getResources().getDisplayMetrics().density); // Jarak di bawah tulisan loading
+        bottomLayout.addView(version, vParams);
 
+        // Pasang Splash ke Root
         root.addView(splash, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, 
                 FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(root);
+        // =======================================================
 
         setupWebView();
         setupCookies();
@@ -215,7 +247,7 @@ public class MainActivity extends Activity {
             public void run() { 
                 triggerNativeAppLock(); 
             }
-        }, 2500);
+        }, 3000); // Saya perpanjang splash menjadi 3 detik agar promosi banner terlihat.
     }
 
     private void checkRemoteCacheWipe() {
@@ -238,13 +270,9 @@ public class MainActivity extends Activity {
                             runOnUiThread(new Runnable() {
                                 @Override
                                 public void run() {
-                                    // BERSiHKAN NATIVE CACHE WEBVIEW
                                     webView.clearCache(true);
-                                    // BERSiHKAN LOCAL STORAGE BROWSER (UI)
                                     webView.evaluateJavascript("localStorage.clear(); sessionStorage.clear();", null);
-                                    // UPDATE VERSI
                                     getSharedPreferences("CurvaPrefs", MODE_PRIVATE).edit().putString("native_cache_version", serverVersion).apply();
-                                    // RELOAD
                                     webView.reload();
                                 }
                             });
@@ -326,6 +354,7 @@ public class MainActivity extends Activity {
         delayHandler.postDelayed(new Runnable() {
             @Override 
             public void run() { 
+                // Kembalikan warna Status Bar ke warna biru aplikasi saat splash selesai
                 setStatusBarColor("#1791f4"); 
                 splash.setVisibility(View.GONE); 
                 checkNotificationPermission(); 

@@ -87,7 +87,6 @@ public class MainActivity extends Activity {
     private boolean isAppUnlocked = false;
     private boolean doubleBackToExitPressedOnce = false;
 
-    // WEB VIEW MURNI KE WEBSITE
     private final String BASE_URL = "https://curva.web.id/ppob/";
     private final String HOME_URL = BASE_URL + "index.php";
 
@@ -95,8 +94,8 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // Buat Status Bar hitam saat Splash Screen (Agar cocok dengan gambar desain warna apapun)
-        setStatusBarColor("#000000");
+        // PERBAIKAN 1: Menyamakan warna Status Bar dengan biru Splash Screen
+        setStatusBarColor("#1791f4");
 
         FrameLayout root = new FrameLayout(this);
         root.setFitsSystemWindows(true);
@@ -107,24 +106,19 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT, 
                 FrameLayout.LayoutParams.MATCH_PARENT));
 
-        // =======================================================
-        // DESAIN SPLASH SCREEN BARU (FULL SCREEN POSTER + LOADING)
-        // =======================================================
+        // DESAIN SPLASH SCREEN
         splash = new RelativeLayout(this);
-        splash.setBackgroundColor(Color.parseColor("#1e293b")); // Warna dasar gelap
+        splash.setBackgroundColor(Color.parseColor("#1791f4")); 
         splash.setClickable(true); 
         splash.setFocusable(true);
 
-        // 1. Gambar Full Screen
         ImageView bgImage = new ImageView(this);
         bgImage.setImageResource(getResources().getIdentifier("splash_logo", "drawable", getPackageName()));
-        // CENTER_CROP membuat gambar memenuhi seluruh layar seperti Poster
         bgImage.setScaleType(ImageView.ScaleType.CENTER_CROP); 
         splash.addView(bgImage, new RelativeLayout.LayoutParams(
                 RelativeLayout.LayoutParams.MATCH_PARENT, 
                 RelativeLayout.LayoutParams.MATCH_PARENT));
 
-        // 2. Wadah Bawah untuk Loading & Versi
         LinearLayout bottomLayout = new LinearLayout(this);
         bottomLayout.setOrientation(LinearLayout.VERTICAL);
         bottomLayout.setGravity(Gravity.CENTER);
@@ -132,18 +126,25 @@ public class MainActivity extends Activity {
                 RelativeLayout.LayoutParams.MATCH_PARENT, 
                 RelativeLayout.LayoutParams.WRAP_CONTENT);
         bottomParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-        // Jarak dari bawah layar
         bottomParams.bottomMargin = (int) (40 * getResources().getDisplayMetrics().density);
         splash.addView(bottomLayout, bottomParams);
 
-        // 3. Baris Indikator Loading (Spinner + Teks)
         LinearLayout loadingRow = new LinearLayout(this);
         loadingRow.setOrientation(LinearLayout.HORIZONTAL);
         loadingRow.setGravity(Gravity.CENTER);
 
-        ProgressBar spinner = new ProgressBar(this, null, android.R.attr.progressBarStyleSmall);
-        // Ubah warna spinner lingkaran menjadi putih
+        // PERBAIKAN 2: Menggunakan gaya animasi standar lalu diperkecil agar tidak padat
+        ProgressBar spinner = new ProgressBar(this, null, android.R.attr.progressBarStyle);
+        LinearLayout.LayoutParams spinnerParams = new LinearLayout.LayoutParams(
+                (int) (22 * getResources().getDisplayMetrics().density),
+                (int) (22 * getResources().getDisplayMetrics().density)
+        );
+        spinner.setLayoutParams(spinnerParams);
+
+        // Pewarnaan modern agar cincin putarannya elegan
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            spinner.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(Color.WHITE));
+        } else {
             spinner.getIndeterminateDrawable().setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
         }
 
@@ -151,15 +152,13 @@ public class MainActivity extends Activity {
         loadingText.setText("Loading...");
         loadingText.setTextColor(Color.WHITE);
         loadingText.setTextSize(14);
-        loadingText.setPadding(20, 0, 0, 0); // Jarak antara lingkaran dan teks
-        // Tambahkan bayangan tipis pada teks agar tetap terbaca jika background terang
-        loadingText.setShadowLayer(3, 1, 1, Color.parseColor("#80000000"));
+        loadingText.setPadding(24, 0, 0, 0); 
+        loadingText.setShadowLayer(3, 1, 1, Color.parseColor("#40000000"));
 
         loadingRow.addView(spinner);
         loadingRow.addView(loadingText);
         bottomLayout.addView(loadingRow);
 
-        // 4. Teks Versi Aplikasi
         String appVersion = "1.0.0";
         try { 
             PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0); 
@@ -170,20 +169,18 @@ public class MainActivity extends Activity {
         version.setText("Versi " + appVersion); 
         version.setTextColor(Color.parseColor("#EEEEEE")); 
         version.setTextSize(11);
-        version.setShadowLayer(3, 1, 1, Color.parseColor("#80000000"));
+        version.setShadowLayer(3, 1, 1, Color.parseColor("#40000000"));
         
         LinearLayout.LayoutParams vParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, 
                 LinearLayout.LayoutParams.WRAP_CONTENT);
-        vParams.topMargin = (int) (12 * getResources().getDisplayMetrics().density); // Jarak di bawah tulisan loading
+        vParams.topMargin = (int) (12 * getResources().getDisplayMetrics().density); 
         bottomLayout.addView(version, vParams);
 
-        // Pasang Splash ke Root
         root.addView(splash, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, 
                 FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(root);
-        // =======================================================
 
         setupWebView();
         setupCookies();
@@ -232,7 +229,6 @@ public class MainActivity extends Activity {
             }
         });
 
-        // CEK SINYAL CACHE DARI SERVER
         checkRemoteCacheWipe();
 
         String initialUrl = handleDeepLink(getIntent());
@@ -247,7 +243,7 @@ public class MainActivity extends Activity {
             public void run() { 
                 triggerNativeAppLock(); 
             }
-        }, 3000); // Saya perpanjang splash menjadi 3 detik agar promosi banner terlihat.
+        }, 3000);
     }
 
     private void checkRemoteCacheWipe() {
@@ -354,7 +350,6 @@ public class MainActivity extends Activity {
         delayHandler.postDelayed(new Runnable() {
             @Override 
             public void run() { 
-                // Kembalikan warna Status Bar ke warna biru aplikasi saat splash selesai
                 setStatusBarColor("#1791f4"); 
                 splash.setVisibility(View.GONE); 
                 checkNotificationPermission(); 

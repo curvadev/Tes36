@@ -94,7 +94,6 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // PERBAIKAN 1: Menyamakan warna Status Bar dengan biru Splash Screen
         setStatusBarColor("#1791f4");
 
         FrameLayout root = new FrameLayout(this);
@@ -133,26 +132,33 @@ public class MainActivity extends Activity {
         loadingRow.setOrientation(LinearLayout.HORIZONTAL);
         loadingRow.setGravity(Gravity.CENTER);
 
-        // PERBAIKAN 2: Menggunakan gaya animasi standar lalu diperkecil agar tidak padat
-        ProgressBar spinner = new ProgressBar(this, null, android.R.attr.progressBarStyle);
+        // =======================================================
+        // PERBAIKAN: LOADING SPINNER AGAR TIDAK PADAT (TETAP TIPIS)
+        // =======================================================
+        ProgressBar spinner = new ProgressBar(this); // Gunakan style default yang bersih
         LinearLayout.LayoutParams spinnerParams = new LinearLayout.LayoutParams(
-                (int) (22 * getResources().getDisplayMetrics().density),
-                (int) (22 * getResources().getDisplayMetrics().density)
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
         );
+        // Beri sedikit jarak margin agar pas dengan teks di sebelahnya
+        spinnerParams.rightMargin = (int) (4 * getResources().getDisplayMetrics().density);
         spinner.setLayoutParams(spinnerParams);
 
-        // Pewarnaan modern agar cincin putarannya elegan
+        // RAHASIANYA: Perkecil skalanya secara visual (65%), ini membuat cincinnya tetap tipis dan putarannya sangat elegan!
+        spinner.setScaleX(0.65f);
+        spinner.setScaleY(0.65f);
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             spinner.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(Color.WHITE));
         } else {
             spinner.getIndeterminateDrawable().setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
         }
+        // =======================================================
 
         TextView loadingText = new TextView(this);
         loadingText.setText("Loading...");
         loadingText.setTextColor(Color.WHITE);
         loadingText.setTextSize(14);
-        loadingText.setPadding(24, 0, 0, 0); 
         loadingText.setShadowLayer(3, 1, 1, Color.parseColor("#40000000"));
 
         loadingRow.addView(spinner);

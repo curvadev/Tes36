@@ -45,7 +45,6 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -90,6 +89,39 @@ public class MainActivity extends Activity {
     private final String BASE_URL = "https://curva.web.id/ppob/";
     private final String HOME_URL = BASE_URL + "index.php";
 
+    // =======================================================
+    // KELAS ANIMASI LOADING CINCIN KUSTOM (ANTI BUG OEM)
+    // =======================================================
+    private class ModernSpinner extends View {
+        private android.graphics.Paint paint;
+        private android.graphics.RectF rect;
+        private float angle = 0;
+
+        public ModernSpinner(Context context) {
+            super(context);
+            paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            paint.setColor(Color.WHITE);
+            paint.setStyle(android.graphics.Paint.Style.STROKE);
+            // Ketebalan garis cincin: 2.5dp (Sangat tipis dan elegan)
+            paint.setStrokeWidth(context.getResources().getDisplayMetrics().density * 2.5f);
+            paint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+            rect = new android.graphics.RectF();
+        }
+
+        @Override
+        protected void onDraw(android.graphics.Canvas canvas) {
+            super.onDraw(canvas);
+            float pad = paint.getStrokeWidth() / 2f + 1f;
+            rect.set(pad, pad, getWidth() - pad, getHeight() - pad);
+            // Menggambar lengkungan 270 derajat (menyisakan ruang kosong agar terlihat berputar)
+            canvas.drawArc(rect, angle, 270, false, paint);
+            angle += 8; // Kecepatan rotasi
+            if (angle >= 360) angle -= 360;
+            invalidate(); // Memaksa animasi terus mengulang
+        }
+    }
+    // =======================================================
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -132,28 +164,14 @@ public class MainActivity extends Activity {
         loadingRow.setOrientation(LinearLayout.HORIZONTAL);
         loadingRow.setGravity(Gravity.CENTER);
 
-        // =======================================================
-        // PERBAIKAN: LOADING SPINNER AGAR TIDAK PADAT (TETAP TIPIS)
-        // =======================================================
-        ProgressBar spinner = new ProgressBar(this); // Gunakan style default yang bersih
+        // MENGGUNAKAN ANIMASI KUSTOM YANG BARU DIBUAT
+        ModernSpinner spinner = new ModernSpinner(this); 
         LinearLayout.LayoutParams spinnerParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
+                (int) (20 * getResources().getDisplayMetrics().density),
+                (int) (20 * getResources().getDisplayMetrics().density)
         );
-        // Beri sedikit jarak margin agar pas dengan teks di sebelahnya
-        spinnerParams.rightMargin = (int) (4 * getResources().getDisplayMetrics().density);
+        spinnerParams.rightMargin = (int) (8 * getResources().getDisplayMetrics().density);
         spinner.setLayoutParams(spinnerParams);
-
-        // RAHASIANYA: Perkecil skalanya secara visual (65%), ini membuat cincinnya tetap tipis dan putarannya sangat elegan!
-        spinner.setScaleX(0.65f);
-        spinner.setScaleY(0.65f);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            spinner.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(Color.WHITE));
-        } else {
-            spinner.getIndeterminateDrawable().setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
-        }
-        // =======================================================
 
         TextView loadingText = new TextView(this);
         loadingText.setText("Loading...");

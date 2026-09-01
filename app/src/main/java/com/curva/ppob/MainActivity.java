@@ -45,6 +45,7 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -102,7 +103,6 @@ public class MainActivity extends Activity {
             paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
             paint.setColor(Color.WHITE);
             paint.setStyle(android.graphics.Paint.Style.STROKE);
-            // Ketebalan garis cincin: 2.5dp (Sangat tipis dan elegan)
             paint.setStrokeWidth(context.getResources().getDisplayMetrics().density * 2.5f);
             paint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
             rect = new android.graphics.RectF();
@@ -113,11 +113,10 @@ public class MainActivity extends Activity {
             super.onDraw(canvas);
             float pad = paint.getStrokeWidth() / 2f + 1f;
             rect.set(pad, pad, getWidth() - pad, getHeight() - pad);
-            // Menggambar lengkungan 270 derajat (menyisakan ruang kosong agar terlihat berputar)
             canvas.drawArc(rect, angle, 270, false, paint);
-            angle += 8; // Kecepatan rotasi
+            angle += 8; 
             if (angle >= 360) angle -= 360;
-            invalidate(); // Memaksa animasi terus mengulang
+            invalidate(); 
         }
     }
     // =======================================================
@@ -137,7 +136,7 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT, 
                 FrameLayout.LayoutParams.MATCH_PARENT));
 
-        // DESAIN SPLASH SCREEN
+        // DESAIN SPLASH SCREEN FULL SCREEN
         splash = new RelativeLayout(this);
         splash.setBackgroundColor(Color.parseColor("#1791f4")); 
         splash.setClickable(true); 
@@ -164,7 +163,7 @@ public class MainActivity extends Activity {
         loadingRow.setOrientation(LinearLayout.HORIZONTAL);
         loadingRow.setGravity(Gravity.CENTER);
 
-        // MENGGUNAKAN ANIMASI KUSTOM YANG BARU DIBUAT
+        // ANIMASI LOADING MODERN
         ModernSpinner spinner = new ModernSpinner(this); 
         LinearLayout.LayoutParams spinnerParams = new LinearLayout.LayoutParams(
                 (int) (20 * getResources().getDisplayMetrics().density),
@@ -1297,6 +1296,115 @@ public class MainActivity extends Activity {
                     startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url.replace("tg://resolve?domain=", "https://t.me/")))); 
                 } 
             } catch (Exception ex) {} 
+        }
+    }
+
+    // =======================================================
+    // FUNGSI PENANGKAP HASIL (KONTAK, FILE, BARCODE, KUNCI)
+    // =======================================================
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        // 1. TANGKAP HASIL FILE CHOOSER (Upload Foto/Bukti Transfer)
+        if (requestCode == FILE_CHOOSER_REQUEST) {
+            if (filePathCallback == null) return;
+            Uri[] results = null;
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                String dataString = data.getDataString();
+                if (dataString != null) {
+                    results = new Uri[]{Uri.parse(dataString)};
+                } else if (data.getClipData() != null) {
+                    int count = data.getClipData().getItemCount();
+                    results = new Uri[count];
+                    for (int i = 0; i < count; i++) {
+                        results[i] = data.getClipData().getItemAt(i).getUri();
+                    }
+                }
+            }
+            filePathCallback.onReceiveValue(results);
+            filePathCallback = null;
+            return;
+        }
+
+        // 2. TANGKAP HASIL KUNCI APLIKASI (Sidik Jari / PIN)
+        if (requestCode == REQUEST_APP_LOCK) {
+            if (resultCode == RESULT_OK) {
+                unlockAppAndHideSplash();
+            } else {
+                showToast("Autentikasi batal/gagal.");
+                finish(); 
+            }
+            return;
+        }
+
+        // 3. TANGKAP HASIL PILIH KONTAK (Phonebook)
+        if (requestCode == PICK_CONTACT_REQUEST) {
+            if (resultCode == RESULT_OK && data != null) {
+                Uri contactData = data.getData();
+                Cursor cursor = getContentResolver().query(contactData, null, null, null, null);
+                if (cursor != null && cursor.moveToFirst()) {
+                    int nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME);
+                    int numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER);
+                    String name = cursor.getString(nameIndex);
+                    String number = cursor.getString(numberIndex);
+                    cursor.close();
+
+                    if (number != null) {
+                        number = number.replaceAll("[^0-9]", ""); 
+                        if (number.startsWith("62")) {
+                            number = "0" + number.substring(2); 
+                        }
+                    }
+
+                    final String finalName = name != null ? name : "";
+                    final String finalNumber = number != null ? number : "";
+
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            String js = "javascript:(function(){" +
+                                        "if(typeof onContactSelected === 'function') { onContactSelected('" + finalName + "', '" + finalNumber + "'); }" +
+                                        "else if(typeof setContact === 'function') { setContact('" + finalName + "', '" + finalNumber + "'); }" +
+                                        "else {" +
+                                        "   var inputs = document.querySelectorAll('input[type=tel], input[name=tujuan], input[name=nomor], input[name=phone], #tujuan, #nomor, #phone');" +
+                                        "   if(inputs.length > 0) {" +
+                                        "       inputs[0].value = '" + finalNumber + "';" +
+                                        "       inputs[0].dispatchEvent(new Event('input', { bubbles: true }));" +
+                                        "       inputs[0].dispatchEvent(new Event('change', { bubbles: true }));" +
+                                        "   }" +
+                                        "}" +
+                                        "})()";
+                            webView.evaluateJavascript(js, null);
+                        }
+                    });
+                }
+            }
+            return;
+        }
+
+        // 4. TANGKAP HASIL SCAN BARCODE
+        if (requestCode == BARCODE_SCAN_REQUEST) {
+            if (resultCode == RESULT_OK && data != null) {
+                String scanResult = data.getStringExtra("SCAN_RESULT");
+                if (scanResult == null) {
+                    try {
+                        com.google.zxing.integration.android.IntentResult result = com.google.zxing.integration.android.IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
+                        if (result != null) scanResult = result.getContents();
+                    } catch (Exception e) {}
+                }
+                
+                final String finalScanResult = scanResult;
+                if (finalScanResult != null) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            webView.evaluateJavascript("javascript:if(typeof onBarcodeScanned === 'function'){onBarcodeScanned('" + finalScanResult + "');}", null);
+                        }
+                    });
+                }
+            }
+            return;
         }
     }
 }

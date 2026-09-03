@@ -103,35 +103,30 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         String channelId = "curva_payment_notif";
         Uri defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
 
-        NotificationManager notificationManager =
-			(NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
 
         Notification notification;
 
         // [JALAN BERCABANG UNTUK LOLOS AIDE]
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             // UNTUK HP BARU (ANDROID 8.0 KE ATAS)
-            NotificationChannel channel = new NotificationChannel(channelId,
-																  "Transaksi & Deposit",
-																  NotificationManager.IMPORTANCE_HIGH);
+            NotificationChannel channel = new NotificationChannel(channelId, "Transaksi & Deposit", NotificationManager.IMPORTANCE_HIGH);
             notificationManager.createNotificationChannel(channel);
 
             android.app.Notification.Builder builder = new android.app.Notification.Builder(this, channelId)
-				.setSmallIcon(R.drawable.ic_launcher)
-				.setContentTitle(title)
-				.setContentText(messageBody)
-				.setAutoCancel(true)
-				.setSound(defaultSoundUri)
-				.setVibrate(new long[]{1000, 1000})
-				.setContentIntent(pendingIntent);
+                .setSmallIcon(R.drawable.ic_launcher)
+                .setContentTitle(title)
+                .setContentText(messageBody)
+                .setAutoCancel(true)
+                .setSound(defaultSoundUri)
+                .setVibrate(new long[]{1000, 1000})
+                .setContentIntent(pendingIntent);
 
             if (imageBitmap != null) {
-                // Jika ada gambar, tampilkan gambar besar
                 builder.setStyle(new android.app.Notification.BigPictureStyle()
-								 .bigPicture(imageBitmap)
-								 .bigLargeIcon((Bitmap) null));
+                                 .bigPicture(imageBitmap)
+                                 .bigLargeIcon((Bitmap) null));
             } else {
-                // PERBAIKAN: Jika tidak ada gambar, jadikan teks multi-baris agar tidak terpotong
                 builder.setStyle(new android.app.Notification.BigTextStyle()
                                  .bigText(messageBody));
             }
@@ -140,22 +135,20 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         } else {
             // UNTUK HP LAMA (DI BAWAH ANDROID 8.0)
             NotificationCompat.Builder builder = new NotificationCompat.Builder(this)
-				.setSmallIcon(R.drawable.ic_launcher)
-				.setContentTitle(title)
-				.setContentText(messageBody)
-				.setAutoCancel(true)
-				.setSound(defaultSoundUri)
-				.setVibrate(new long[]{1000, 1000})
-				.setPriority(NotificationCompat.PRIORITY_HIGH)
-				.setContentIntent(pendingIntent);
+                .setSmallIcon(R.drawable.ic_launcher)
+                .setContentTitle(title)
+                .setContentText(messageBody)
+                .setAutoCancel(true)
+                .setSound(defaultSoundUri)
+                .setVibrate(new long[]{1000, 1000})
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setContentIntent(pendingIntent);
 
             if (imageBitmap != null) {
-                // Jika ada gambar, tampilkan gambar besar
                 builder.setStyle(new NotificationCompat.BigPictureStyle()
-								 .bigPicture(imageBitmap)
-								 .bigLargeIcon(null));
+                                 .bigPicture(imageBitmap)
+                                 .bigLargeIcon(null));
             } else {
-                // PERBAIKAN: Jika tidak ada gambar, jadikan teks multi-baris agar tidak terpotong
                 builder.setStyle(new NotificationCompat.BigTextStyle()
                                  .bigText(messageBody));
             }
@@ -166,31 +159,3 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         notificationManager.notify((int) System.currentTimeMillis(), notification);
     }
 }
-
-            notification = builder.build();
-        } else {
-            // UNTUK HP LAMA (DI BAWAH ANDROID 8.0)
-            NotificationCompat.Builder builder = new NotificationCompat.Builder(this)
-				.setSmallIcon(R.drawable.ic_launcher)
-				.setContentTitle(title)
-				.setContentText(messageBody)
-				.setAutoCancel(true)
-				.setSound(defaultSoundUri)
-				.setVibrate(new long[]{1000, 1000})
-				.setPriority(NotificationCompat.PRIORITY_HIGH)
-				.setContentIntent(pendingIntent);
-
-            // Jika ada gambar, sulap menjadi Notifikasi Besar (BigPictureStyle)
-            if (imageBitmap != null) {
-                builder.setStyle(new NotificationCompat.BigPictureStyle()
-								 .bigPicture(imageBitmap)
-								 .bigLargeIcon(null));
-            }
-
-            notification = builder.build();
-        }
-
-        notificationManager.notify((int) System.currentTimeMillis(), notification);
-    }
-}
-

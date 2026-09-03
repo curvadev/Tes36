@@ -125,12 +125,47 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
 				.setVibrate(new long[]{1000, 1000})
 				.setContentIntent(pendingIntent);
 
-            // Jika ada gambar, sulap menjadi Notifikasi Besar (BigPictureStyle)
             if (imageBitmap != null) {
+                // Jika ada gambar, tampilkan gambar besar
                 builder.setStyle(new android.app.Notification.BigPictureStyle()
 								 .bigPicture(imageBitmap)
 								 .bigLargeIcon((Bitmap) null));
+            } else {
+                // PERBAIKAN: Jika tidak ada gambar, jadikan teks multi-baris agar tidak terpotong
+                builder.setStyle(new android.app.Notification.BigTextStyle()
+                                 .bigText(messageBody));
             }
+
+            notification = builder.build();
+        } else {
+            // UNTUK HP LAMA (DI BAWAH ANDROID 8.0)
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(this)
+				.setSmallIcon(R.drawable.ic_launcher)
+				.setContentTitle(title)
+				.setContentText(messageBody)
+				.setAutoCancel(true)
+				.setSound(defaultSoundUri)
+				.setVibrate(new long[]{1000, 1000})
+				.setPriority(NotificationCompat.PRIORITY_HIGH)
+				.setContentIntent(pendingIntent);
+
+            if (imageBitmap != null) {
+                // Jika ada gambar, tampilkan gambar besar
+                builder.setStyle(new NotificationCompat.BigPictureStyle()
+								 .bigPicture(imageBitmap)
+								 .bigLargeIcon(null));
+            } else {
+                // PERBAIKAN: Jika tidak ada gambar, jadikan teks multi-baris agar tidak terpotong
+                builder.setStyle(new NotificationCompat.BigTextStyle()
+                                 .bigText(messageBody));
+            }
+
+            notification = builder.build();
+        }
+
+        notificationManager.notify((int) System.currentTimeMillis(), notification);
+    }
+}
 
             notification = builder.build();
         } else {

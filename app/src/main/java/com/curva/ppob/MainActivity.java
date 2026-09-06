@@ -50,6 +50,7 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.firebase.messaging.FirebaseMessaging;
 import com.journeyapps.barcodescanner.CaptureActivity;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -125,6 +126,18 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
+        // --- LOGIKA SMART NOTIFIKASI FIREBASE (USER VS ADMIN) ---
+        try {
+            if (getPackageName().toLowerCase().contains("admin")) {
+                FirebaseMessaging.getInstance().subscribeToTopic("admin_notif");
+            } else {
+                FirebaseMessaging.getInstance().subscribeToTopic("all_users");
+            }
+        } catch (Exception e) {
+            // Abaikan error jika Firebase belum diinisialisasi dengan benar
+        }
+        // --------------------------------------------------------
+
         setStatusBarColor("#1791f4");
 
         FrameLayout root = new FrameLayout(this);

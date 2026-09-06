@@ -88,27 +88,15 @@ public class MainActivity extends Activity {
     private boolean isAppUnlocked = false;
     private boolean doubleBackToExitPressedOnce = false;
 
-    private String APP_URL = "https://curva.web.id/ppob/"; 
-    public int SPLASH_TIME = 3000;
+    private String BASE_URL = "https://curva.web.id/ppob/";
+    private String HOME_URL = BASE_URL + "index.php";
 
-    private String getHomeUrl() {
-        String url = APP_URL;
-        if (!url.endsWith("/")) url += "/";
-        
-        if (getPackageName().toLowerCase().contains("admin")) {
-            if (!url.endsWith(".php")) url += "login.php";
-        } else {
-            if (!url.endsWith(".php")) url += "index.php";
-        }
-        return url;
-    }
+    // Durasi Splash Screen (bisa diubah oleh Github Actions)
+    private int SPLASH_TIME = 3000;
 
-    private String getRootApiUrl() {
-        String url = APP_URL;
-        if (!url.endsWith("/")) url += "/";
-        return url.replace("admin/", ""); 
-    }
-
+    // =======================================================
+    // KELAS ANIMASI LOADING CINCIN KUSTOM
+    // =======================================================
     private class ModernSpinner extends View {
         private android.graphics.Paint paint;
         private android.graphics.RectF rect;
@@ -135,18 +123,28 @@ public class MainActivity extends Activity {
             invalidate(); 
         }
     }
+    // =======================================================
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
+        // --- LOGIKA SMART URL & NOTIFIKASI (USER VS ADMIN) ---
+        boolean isAdmin = false;
         try {
             if (getPackageName().toLowerCase().contains("admin")) {
+                isAdmin = true;
                 FirebaseMessaging.getInstance().subscribeToTopic("admin_notif");
+                // Perbaikan 404: Jika admin, gunakan dashboard.php (ubah jika nama file awal admin Anda beda)
+                if(!BASE_URL.endsWith("/")) BASE_URL += "/";
+                HOME_URL = BASE_URL + "dashboard.php"; 
             } else {
                 FirebaseMessaging.getInstance().subscribeToTopic("all_users");
+                if(!BASE_URL.endsWith("/")) BASE_URL += "/";
+                HOME_URL = BASE_URL + "index.php";
             }
         } catch (Exception e) {}
+        // --------------------------------------------------------
 
         setStatusBarColor("#1791f4");
 
@@ -159,6 +157,7 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT, 
                 FrameLayout.LayoutParams.MATCH_PARENT));
 
+        // DESAIN SPLASH SCREEN FULL SCREEN
         splash = new RelativeLayout(this);
         splash.setBackgroundColor(Color.parseColor("#1791f4")); 
         splash.setClickable(true); 
@@ -226,6 +225,7 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(root);
 
+        // Langsung sembunyikan jika durasi 0 (Fitur nonaktif Splash Screen)
         if (SPLASH_TIME <= 0) {
             splash.setVisibility(View.GONE);
             isAppUnlocked = true;
@@ -304,7 +304,7 @@ public class MainActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    URL url = new URL(getRootApiUrl() + "api/cache_version.txt?t=" + System.currentTimeMillis());
+                    URL url = new URL(BASE_URL + "api/cache_version.txt?t=" + System.currentTimeMillis());
                     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                     conn.setConnectTimeout(5000);
                     
@@ -403,6 +403,7 @@ public class MainActivity extends Activity {
         delayHandler.postDelayed(new Runnable() {
             @Override 
             public void run() { 
+                // Biarkan warna status bar sesuai tema yang diatur di build.yml
                 splash.setVisibility(View.GONE); 
                 checkNotificationPermission(); 
                 checkForAppUpdate(); 
@@ -442,7 +443,7 @@ public class MainActivity extends Activity {
             @Override 
             public void run() {
                 try {
-                    String bypassCacheUrl = getRootApiUrl() + "api/check_version.php?timestamp=" + System.currentTimeMillis(); 
+                    String bypassCacheUrl = BASE_URL + "api/check_version.php?timestamp=" + System.currentTimeMillis(); 
                     URL url = new URL(bypassCacheUrl); 
                     HttpURLConnection conn = (HttpURLConnection) url.openConnection(); 
                     conn.setRequestMethod("GET"); 
@@ -589,7 +590,7 @@ public class MainActivity extends Activity {
         setIntent(intent);
         if (intent != null && intent.getExtras() != null) {
             String newUrl = handleDeepLink(intent);
-            if (!newUrl.equals(getHomeUrl())) { 
+            if (!newUrl.equals(HOME_URL)) { 
                 if (isNetworkAvailable()) { 
                     webView.loadUrl(newUrl); 
                 } else { 
@@ -600,21 +601,21 @@ public class MainActivity extends Activity {
     }
 
     private String handleDeepLink(Intent intent) {
-        String urlToLoad = getHomeUrl(); 
+        String urlToLoad = HOME_URL; 
         if (intent != null && intent.getExtras() != null) {
             String type = intent.getStringExtra("type");
             if ("deposit_success".equals(type)) {
                 String notifId = intent.getStringExtra("notification_id"); 
-                urlToLoad = getRootApiUrl() + (notifId != null ? "user/notifications.php?show_id=" + notifId : "user/notifications.php");
+                urlToLoad = BASE_URL + (notifId != null ? "user/notifications.php?show_id=" + notifId : "user/notifications.php");
             } else if ("transaction_success".equals(type) || "transaction_failed".equals(type)) {
                 String trxId = intent.getStringExtra("transaction_id"); 
                 if (trxId != null) { 
-                    urlToLoad = getRootApiUrl() + "user/transaction_detail.php?id=" + trxId; 
+                    urlToLoad = BASE_URL + "user/transaction_detail.php?id=" + trxId; 
                 }
             } else if (intent.hasExtra("target_url")) {
                 String target = intent.getStringExtra("target_url"); 
                 if (target != null && !target.isEmpty()) { 
-                    urlToLoad = target.startsWith("http") ? target : getRootApiUrl() + (target.startsWith("/") ? target.substring(1) : target); 
+                    urlToLoad = target.startsWith("http") ? target : BASE_URL + (target.startsWith("/") ? target.substring(1) : target); 
                 }
             }
         }
@@ -690,7 +691,7 @@ public class MainActivity extends Activity {
                     @Override 
                     public void run() { 
                         if (isNetworkAvailable()) { 
-                            webView.loadUrl(getHomeUrl()); 
+                            webView.loadUrl(HOME_URL); 
                         } else { 
                             showToast("Koneksi internet masih terputus."); 
                         } 
@@ -713,7 +714,7 @@ public class MainActivity extends Activity {
                 String base64Str = defaultValue; 
                 String fileNameStr = "QRIS_Deposit.png"; 
                 if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) { 
-                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\||"); 
+                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|"); 
                     base64Str = parts.length > 0 ? parts[0] : ""; 
                     fileNameStr = parts.length > 1 ? parts[1] : "QRIS_Deposit.png"; 
                 } 
@@ -1292,7 +1293,7 @@ public class MainActivity extends Activity {
         try { 
             String token = java.net.URLEncoder.encode(fcmToken, "UTF-8"); 
             String device = java.net.URLEncoder.encode("Android WebView", "UTF-8"); 
-            final String js = "javascript:(function(){ try{var xhr=new XMLHttpRequest(); xhr.open('POST','" + getRootApiUrl() + "api/save_fcm_token.php',true); xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded'); xhr.send('token=" + token + "&device_name=" + device + "');}catch(e){} })()";
+            final String js = "javascript:(function(){ try{var xhr=new XMLHttpRequest(); xhr.open('POST','" + BASE_URL + "api/save_fcm_token.php',true); xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded'); xhr.send('token=" + token + "&device_name=" + device + "');}catch(e){} })()";
             
             webView.post(new Runnable() { 
                 @Override 
@@ -1328,10 +1329,14 @@ public class MainActivity extends Activity {
         }
     }
 
+    // =======================================================
+    // FUNGSI PENANGKAP HASIL (KONTAK, FILE, BARCODE, KUNCI)
+    // =======================================================
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
+        // 1. TANGKAP HASIL FILE CHOOSER (Upload Foto/Bukti Transfer)
         if (requestCode == FILE_CHOOSER_REQUEST) {
             if (filePathCallback == null) return;
             Uri[] results = null;
@@ -1352,6 +1357,7 @@ public class MainActivity extends Activity {
             return;
         }
 
+        // 2. TANGKAP HASIL KUNCI APLIKASI (Sidik Jari / PIN)
         if (requestCode == REQUEST_APP_LOCK) {
             if (resultCode == RESULT_OK) {
                 unlockAppAndHideSplash();
@@ -1362,6 +1368,7 @@ public class MainActivity extends Activity {
             return;
         }
 
+        // 3. TANGKAP HASIL PILIH KONTAK (Phonebook)
         if (requestCode == PICK_CONTACT_REQUEST) {
             if (resultCode == RESULT_OK && data != null) {
                 Uri contactData = data.getData();
@@ -1406,6 +1413,7 @@ public class MainActivity extends Activity {
             return;
         }
 
+        // 4. TANGKAP HASIL SCAN BARCODE
         if (requestCode == BARCODE_SCAN_REQUEST) {
             if (resultCode == RESULT_OK && data != null) {
                 String scanResult = data.getStringExtra("SCAN_RESULT");

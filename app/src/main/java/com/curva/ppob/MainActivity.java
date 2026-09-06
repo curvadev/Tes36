@@ -88,11 +88,14 @@ public class MainActivity extends Activity {
     private boolean isAppUnlocked = false;
     private boolean doubleBackToExitPressedOnce = false;
 
-    private final String BASE_URL = "https://curva.web.id/ppob/";
-    private final String HOME_URL = BASE_URL + "index.php";
+    private String BASE_URL = "https://curva.web.id/ppob/";
+    private String HOME_URL = BASE_URL + "index.php";
+
+    // Durasi Splash Screen (bisa diubah oleh Github Actions)
+    private int SPLASH_TIME = 3000;
 
     // =======================================================
-    // KELAS ANIMASI LOADING CINCIN KUSTOM (ANTI BUG OEM)
+    // KELAS ANIMASI LOADING CINCIN KUSTOM
     // =======================================================
     private class ModernSpinner extends View {
         private android.graphics.Paint paint;
@@ -126,16 +129,21 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // --- LOGIKA SMART NOTIFIKASI FIREBASE (USER VS ADMIN) ---
+        // --- LOGIKA SMART URL & NOTIFIKASI (USER VS ADMIN) ---
+        boolean isAdmin = false;
         try {
             if (getPackageName().toLowerCase().contains("admin")) {
+                isAdmin = true;
                 FirebaseMessaging.getInstance().subscribeToTopic("admin_notif");
+                // Perbaikan 404: Jika admin, gunakan dashboard.php (ubah jika nama file awal admin Anda beda)
+                if(!BASE_URL.endsWith("/")) BASE_URL += "/";
+                HOME_URL = BASE_URL + "dashboard.php"; 
             } else {
                 FirebaseMessaging.getInstance().subscribeToTopic("all_users");
+                if(!BASE_URL.endsWith("/")) BASE_URL += "/";
+                HOME_URL = BASE_URL + "index.php";
             }
-        } catch (Exception e) {
-            // Abaikan error jika Firebase belum diinisialisasi dengan benar
-        }
+        } catch (Exception e) {}
         // --------------------------------------------------------
 
         setStatusBarColor("#1791f4");
@@ -176,7 +184,6 @@ public class MainActivity extends Activity {
         loadingRow.setOrientation(LinearLayout.HORIZONTAL);
         loadingRow.setGravity(Gravity.CENTER);
 
-        // ANIMASI LOADING MODERN
         ModernSpinner spinner = new ModernSpinner(this); 
         LinearLayout.LayoutParams spinnerParams = new LinearLayout.LayoutParams(
                 (int) (20 * getResources().getDisplayMetrics().density),
@@ -217,6 +224,14 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT, 
                 FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(root);
+
+        // Langsung sembunyikan jika durasi 0 (Fitur nonaktif Splash Screen)
+        if (SPLASH_TIME <= 0) {
+            splash.setVisibility(View.GONE);
+            isAppUnlocked = true;
+            checkNotificationPermission();
+            checkForAppUpdate();
+        }
 
         setupWebView();
         setupCookies();
@@ -274,12 +289,14 @@ public class MainActivity extends Activity {
             showOfflineScreen(webView);
         }
 
-        splashHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() { 
-                triggerNativeAppLock(); 
-            }
-        }, 3000);
+        if (SPLASH_TIME > 0) {
+            splashHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() { 
+                    triggerNativeAppLock(); 
+                }
+            }, SPLASH_TIME);
+        }
     }
 
     private void checkRemoteCacheWipe() {
@@ -386,7 +403,7 @@ public class MainActivity extends Activity {
         delayHandler.postDelayed(new Runnable() {
             @Override 
             public void run() { 
-                setStatusBarColor("#1791f4"); 
+                // Biarkan warna status bar sesuai tema yang diatur di build.yml
                 splash.setVisibility(View.GONE); 
                 checkNotificationPermission(); 
                 checkForAppUpdate(); 

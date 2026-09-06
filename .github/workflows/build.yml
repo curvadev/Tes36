@@ -90,11 +90,13 @@ jobs:
           if [ -n "${{ github.event.inputs.version_code }}" ]; then sed -i "s/versionCode .*/versionCode ${{ github.event.inputs.version_code }}/g" app/build.gradle; fi
           if [ -n "${{ github.event.inputs.min_sdk }}" ]; then sed -i "s/minSdk .*/minSdk ${{ github.event.inputs.min_sdk }}/g" app/build.gradle; fi
           if [ -n "${{ github.event.inputs.target_sdk }}" ]; then sed -i "s/targetSdk .*/targetSdk ${{ github.event.inputs.target_sdk }}/g" app/build.gradle; fi
-          if [ -n "${{ github.event.inputs.google_services_url }}" ]; then wget -O app/google-services.json "${{ github.event.inputs.google_services_url }}"; fi
-          if [ -n "${{ github.event.inputs.logo_url }}" ]; then wget -O app/src/main/res/drawable/ic_launcher.png "${{ github.event.inputs.logo_url }}"; fi
-          if [ -n "${{ github.event.inputs.splash_url }}" ]; then wget -O app/src/main/res/drawable/splash_logo.png "${{ github.event.inputs.splash_url }}"; fi
           
-          # --- FITUR BARU: INJEKSI WEBVIEW URL, WARNA TEMA, DAN SPLASH SCREEN ---
+          # --- PERBAIKAN: MENGGUNAKAN CURL DENGAN USER AGENT CHROME UNTUK BYPASS FIREWALL HOSTING ---
+          if [ -n "${{ github.event.inputs.google_services_url }}" ]; then curl -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36" -o app/google-services.json "${{ github.event.inputs.google_services_url }}"; fi
+          if [ -n "${{ github.event.inputs.logo_url }}" ]; then curl -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36" -o app/src/main/res/drawable/ic_launcher.png "${{ github.event.inputs.logo_url }}"; fi
+          if [ -n "${{ github.event.inputs.splash_url }}" ]; then curl -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36" -o app/src/main/res/drawable/splash_logo.png "${{ github.event.inputs.splash_url }}"; fi
+          # ------------------------------------------------------------------------------------------
+          
           if [ -n "${{ github.event.inputs.app_url }}" ]; then 
             echo "Mengganti URL Webview..."
             find app/src/main/java -name "*.java" -exec sed -i -E "s|loadUrl\(\"https?://[^\"]+\"\)|loadUrl(\"${{ github.event.inputs.app_url }}\")|g" {} +

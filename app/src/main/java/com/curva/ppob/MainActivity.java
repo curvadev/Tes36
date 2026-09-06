@@ -41,7 +41,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
-importandroid.webkit.WebViewClient;
+import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -88,12 +88,8 @@ public class MainActivity extends Activity {
     private boolean isAppUnlocked = false;
     private boolean doubleBackToExitPressedOnce = false;
 
-    // =======================================================
-    // VARIABEL UTAMA YANG AKAN DI-REPLACE OLEH GITHUB ACTIONS
-    // =======================================================
     private String APP_URL = "https://curva.web.id/ppob/"; 
-    public int SPLASH_TIME = 3000; // <--- Target utama pemutus splash screen
-    // =======================================================
+    public int SPLASH_TIME = 3000;
 
     private String getHomeUrl() {
         String url = APP_URL;
@@ -113,9 +109,6 @@ public class MainActivity extends Activity {
         return url.replace("admin/", ""); 
     }
 
-    // =======================================================
-    // KELAS ANIMASI LOADING CINCIN KUSTOM
-    // =======================================================
     private class ModernSpinner extends View {
         private android.graphics.Paint paint;
         private android.graphics.RectF rect;
@@ -142,7 +135,6 @@ public class MainActivity extends Activity {
             invalidate(); 
         }
     }
-    // =======================================================
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -167,7 +159,6 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT, 
                 FrameLayout.LayoutParams.MATCH_PARENT));
 
-        // DESAIN SPLASH SCREEN FULL SCREEN
         splash = new RelativeLayout(this);
         splash.setBackgroundColor(Color.parseColor("#1791f4")); 
         splash.setClickable(true); 
@@ -235,7 +226,6 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(root);
 
-        // JIKA SPLASH_TIME 0, LANGSUNG HILANGKAN
         if (SPLASH_TIME <= 0) {
             splash.setVisibility(View.GONE);
             isAppUnlocked = true;
@@ -723,7 +713,7 @@ public class MainActivity extends Activity {
                 String base64Str = defaultValue; 
                 String fileNameStr = "QRIS_Deposit.png"; 
                 if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) { 
-                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|"); 
+                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\||"); 
                     base64Str = parts.length > 0 ? parts[0] : ""; 
                     fileNameStr = parts.length > 1 ? parts[1] : "QRIS_Deposit.png"; 
                 } 
@@ -1391,7 +1381,7 @@ public class MainActivity extends Activity {
                     }
 
                     final String finalName = name != null ? name : "";
-                    final String finalNumber = number != null ? name : ""; // Diperbaiki agar tidak keliru
+                    final String finalNumber = number != null ? number : "";
 
                     runOnUiThread(new Runnable() {
                         @Override

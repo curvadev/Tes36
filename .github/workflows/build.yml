@@ -84,25 +84,22 @@ jobs:
       - name: 1. Menerapkan Konfigurasi Dasar & Injeksi Database
         run: |
           echo "Memproses Parameter Dinamis..."
-          
-          # 1. Ganti Nama Aplikasi di strings.xml
-          if [ -n "${{ github.event.inputs.app_name }}" ]; then
-            echo "Mengganti Nama Aplikasi menjadi: ${{ github.event.inputs.app_name }}"
-            find app/src/main/res/values -name "strings.xml" -exec sed -i -E "s|<string name=\"app_name\">[^<]+<\/string>|<string name=\"app_name\">${{ github.event.inputs.app_name }}<\/string>|g" {} +
-          fi
-
+          if [ -n "${{ github.event.inputs.app_name }}" ]; then sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">${{ github.event.inputs.app_name }}<\/string>/g" app/src/main/res/values/strings.xml; fi
           if [ -n "${{ github.event.inputs.package_name }}" ]; then sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/g" app/build.gradle; fi
           if [ -n "${{ github.event.inputs.version_name }}" ]; then sed -i "s/versionName \".*\"/versionName \"${{ github.event.inputs.version_name }}\"/g" app/build.gradle; fi
           if [ -n "${{ github.event.inputs.version_code }}" ]; then sed -i "s/versionCode .*/versionCode ${{ github.event.inputs.version_code }}/g" app/build.gradle; fi
           if [ -n "${{ github.event.inputs.min_sdk }}" ]; then sed -i "s/minSdk .*/minSdk ${{ github.event.inputs.min_sdk }}/g" app/build.gradle; fi
           if [ -n "${{ github.event.inputs.target_sdk }}" ]; then sed -i "s/targetSdk .*/targetSdk ${{ github.event.inputs.target_sdk }}/g" app/build.gradle; fi
           
+          # --- PERBAIKAN: MENGGUNAKAN CURL DENGAN USER AGENT CHROME UNTUK BYPASS FIREWALL HOSTING ---
           if [ -n "${{ github.event.inputs.google_services_url }}" ]; then curl -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36" -o app/google-services.json "${{ github.event.inputs.google_services_url }}"; fi
           if [ -n "${{ github.event.inputs.logo_url }}" ]; then curl -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36" -o app/src/main/res/drawable/ic_launcher.png "${{ github.event.inputs.logo_url }}"; fi
           if [ -n "${{ github.event.inputs.splash_url }}" ]; then curl -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36" -o app/src/main/res/drawable/splash_logo.png "${{ github.event.inputs.splash_url }}"; fi
+          # ------------------------------------------------------------------------------------------
           
           if [ -n "${{ github.event.inputs.app_url }}" ]; then 
             echo "Mengganti URL Webview..."
+            find app/src/main/java -name "*.java" -exec sed -i -E "s|loadUrl\(\"https?://[^\"]+\"\)|loadUrl(\"${{ github.event.inputs.app_url }}\")|g" {} +
             find app/src/main/java -name "*.java" -exec sed -i -E "s|(String [a-zA-Z_0-9]+ = )\"https?://[^\"]+\";|\1\"${{ github.event.inputs.app_url }}\";|g" {} +
           fi
           
@@ -113,10 +110,10 @@ jobs:
             find app/src/main/res/values -name "colors.xml" -exec sed -i -E "s|<color name=\"colorAccent\">.+</color>|<color name=\"colorAccent\">${{ github.event.inputs.theme_color }}</color>|g" {} +
           fi
           
-          # 2. Matikan Splash Screen jika disetel 0
           if [ "${{ github.event.inputs.use_splash }}" == "0" ]; then
-            echo "Menonaktifkan Splash Screen (Set SPLASH_TIME jadi 0)..."
-            find app/src/main/java -name "MainActivity.java" -exec sed -i 's/public int SPLASH_TIME = [0-9]*;/public int SPLASH_TIME = 0;/g' {} +
+            echo "Menonaktifkan Splash Screen (Set waktu delay jadi 0)..."
+            find app/src/main/java -name "*.java" -exec sed -i -E 's/postDelayed\(([^,]+), [0-9]+\)/postDelayed(\1, 0)/g' {} +
+            find app/src/main/java -name "Splash*.java" -exec sed -i -E 's/= [0-9]{3,4};/= 0;/g' {} +
           fi
 
       - name: 2. Robot Upgrade Ke Google Code Scanner (Python)
@@ -124,6 +121,7 @@ jobs:
           cat << 'EOF' > upgrade_scanner.py
           import re
           
+          # Suntik library ke Gradle
           with open("app/build.gradle", "r") as f: 
               gradle = f.read()
           if "play-services-code-scanner" not in gradle:
@@ -131,6 +129,7 @@ jobs:
               with open("app/build.gradle", "w") as f: 
                   f.write(gradle)
           
+          # Bedah file Java dan ganti fungsi Scanner jadul
           with open("app/src/main/java/com/curva/ppob/MainActivity.java", "r") as f: 
               java = f.read()
           
@@ -186,8 +185,10 @@ jobs:
           find app/src/main/java -name "*.java" -exec sed -i 's/PendingIntent.FLAG_UPDATE_CURRENT/PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE/g' {} +
           sed -i 's/<activity android:name=".MainActivity"/<activity android:name=".MainActivity" android:exported="true"/g' app/src/main/AndroidManifest.xml
           
+          # --- PERBAIKAN BUG HEADER MENABRAK STATUS BAR (INJEKSI OTOMATIS) ---
           find app/src/main/res/layout -name "*.xml" -exec sed -i 's/xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android"/xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android" android:fitsSystemWindows="true"/g' {} +
           find app/src/main/res/layout -name "*.xml" -exec sed -i 's/<WebView/<WebView android:fitsSystemWindows="true"/g' {} +
+          # -------------------------------------------------------------------
 
       - name: 4. Build Aplikasi (Isolasi Tugas & Injeksi Memori)
         run: |

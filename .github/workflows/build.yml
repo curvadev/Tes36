@@ -29,6 +29,18 @@ on:
         description: 'Target SDK'
         required: false
         default: ''
+      app_url:
+        description: 'URL Webview'
+        required: false
+        default: ''
+      theme_color:
+        description: 'Warna Tema Hex'
+        required: false
+        default: ''
+      use_splash:
+        description: 'Gunakan Splash Screen (1/0)'
+        required: false
+        default: '1'
       logo_url:
         description: 'URL Gambar Logo Baru'
         required: false
@@ -69,7 +81,7 @@ jobs:
       - name: Izin Eksekusi Gradle
         run: chmod +x gradlew
 
-      - name: 1. Menerapkan Konfigurasi Dasar
+      - name: 1. Menerapkan Konfigurasi Dasar & Injeksi Database
         run: |
           echo "Memproses Parameter Dinamis..."
           if [ -n "${{ github.event.inputs.app_name }}" ]; then sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">${{ github.event.inputs.app_name }}<\/string>/g" app/src/main/res/values/strings.xml; fi
@@ -81,6 +93,26 @@ jobs:
           if [ -n "${{ github.event.inputs.google_services_url }}" ]; then wget -O app/google-services.json "${{ github.event.inputs.google_services_url }}"; fi
           if [ -n "${{ github.event.inputs.logo_url }}" ]; then wget -O app/src/main/res/drawable/ic_launcher.png "${{ github.event.inputs.logo_url }}"; fi
           if [ -n "${{ github.event.inputs.splash_url }}" ]; then wget -O app/src/main/res/drawable/splash_logo.png "${{ github.event.inputs.splash_url }}"; fi
+          
+          # --- FITUR BARU: INJEKSI WEBVIEW URL, WARNA TEMA, DAN SPLASH SCREEN ---
+          if [ -n "${{ github.event.inputs.app_url }}" ]; then 
+            echo "Mengganti URL Webview..."
+            find app/src/main/java -name "*.java" -exec sed -i -E "s|loadUrl\(\"https?://[^\"]+\"\)|loadUrl(\"${{ github.event.inputs.app_url }}\")|g" {} +
+            find app/src/main/java -name "*.java" -exec sed -i -E "s|(String [a-zA-Z_0-9]+ = )\"https?://[^\"]+\";|\1\"${{ github.event.inputs.app_url }}\";|g" {} +
+          fi
+          
+          if [ -n "${{ github.event.inputs.theme_color }}" ]; then 
+            echo "Mengganti Warna Tema..."
+            find app/src/main/res/values -name "colors.xml" -exec sed -i -E "s|<color name=\"colorPrimary\">.+</color>|<color name=\"colorPrimary\">${{ github.event.inputs.theme_color }}</color>|g" {} +
+            find app/src/main/res/values -name "colors.xml" -exec sed -i -E "s|<color name=\"colorPrimaryDark\">.+</color>|<color name=\"colorPrimaryDark\">${{ github.event.inputs.theme_color }}</color>|g" {} +
+            find app/src/main/res/values -name "colors.xml" -exec sed -i -E "s|<color name=\"colorAccent\">.+</color>|<color name=\"colorAccent\">${{ github.event.inputs.theme_color }}</color>|g" {} +
+          fi
+          
+          if [ "${{ github.event.inputs.use_splash }}" == "0" ]; then
+            echo "Menonaktifkan Splash Screen (Set waktu delay jadi 0)..."
+            find app/src/main/java -name "*.java" -exec sed -i -E 's/postDelayed\(([^,]+), [0-9]+\)/postDelayed(\1, 0)/g' {} +
+            find app/src/main/java -name "Splash*.java" -exec sed -i -E 's/= [0-9]{3,4};/= 0;/g' {} +
+          fi
 
       - name: 2. Robot Upgrade Ke Google Code Scanner (Python)
         run: |

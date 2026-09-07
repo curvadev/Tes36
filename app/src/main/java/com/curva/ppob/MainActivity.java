@@ -26,7 +26,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.provider.ContactsContract;
-import android.support.v4.content.FileProvider;
+import androidx.core.content.FileProvider;
 import android.util.Base64;
 import android.view.Gravity;
 import android.view.View;
@@ -89,12 +89,12 @@ public class MainActivity extends Activity {
     private boolean doubleBackToExitPressedOnce = false;
 
     // =======================================================
-    // VARIABEL UTAMA (JANGAN DIHAPUS, DIBACA OLEH GITHUB ACTIONS)
+    // TARGET GITHUB ACTIONS (JANGAN UBAH BARIS INI MANUAL)
     // =======================================================
     private String APP_URL = "https://curva.web.id/ppob/"; 
     public int SPLASH_TIME = 3000;
+    // =======================================================
 
-    // ROUTER PINTAR: OTOMATIS LOGIN.PHP UNTUK ADMIN
     private String getHomeUrl() {
         String url = APP_URL;
         if (!url.endsWith("/")) url += "/";

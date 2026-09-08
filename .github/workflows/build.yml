@@ -82,12 +82,25 @@ jobs:
         run: chmod +x gradlew
 
       - name: 1. Menerapkan Konfigurasi Dasar & Injeksi Database (Mode Python Ampuh)
+        env:
+          INPUT_APP_NAME: ${{ github.event.inputs.app_name }}
+          INPUT_USE_SPLASH: ${{ github.event.inputs.use_splash }}
         run: |
           echo "Memproses Parameter Dinamis..."
           
-          # [1] INJEKSI PYTHON UNTUK MENGGANTI NAMA APLIKASI (100% PASTI BERHASIL)
-          if [ -n "${{ github.event.inputs.app_name }}" ]; then
-            python3 -c "import re; f=open('app/src/main/res/values/strings.xml', 'r'); c=f.read(); c=re.sub(r'<string name=\"app_name\">[^<]+</string>', '<string name=\"app_name\">${{ github.event.inputs.app_name }}</string>', c); f.close(); f=open('app/src/main/res/values/strings.xml', 'w'); f.write(c)"
+          # [1] INJEKSI PYTHON UNTUK MENGGANTI NAMA APLIKASI DI SELURUH FOLDER (100% AKURAT)
+          if [ -n "$INPUT_APP_NAME" ]; then
+            echo "Mengganti Nama Aplikasi menjadi: $INPUT_APP_NAME"
+            python3 -c "
+          import glob, re, os
+          name = os.environ.get('INPUT_APP_NAME', '')
+          for path in glob.glob('app/src/main/res/**/strings.xml', recursive=True):
+              with open(path, 'r', encoding='utf-8') as f:
+                  content = f.read()
+              content = re.sub(r'<string name=\"app_name\"[^>]*>[^<]+</string>', f'<string name=\"app_name\">{name}</string>', content)
+              with open(path, 'w', encoding='utf-8') as f:
+                  f.write(content)
+          "
           fi
 
           if [ -n "${{ github.event.inputs.package_name }}" ]; then sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/g" app/build.gradle; fi
@@ -112,10 +125,17 @@ jobs:
             find app/src/main/res/values -name "colors.xml" -exec sed -i -E "s|<color name=\"colorAccent\">.+</color>|<color name=\"colorAccent\">${{ github.event.inputs.theme_color }}</color>|g" {} +
           fi
           
-          # [2] INJEKSI PYTHON UNTUK MEMATIKAN SPLASH SCREEN (100% PASTI BERHASIL)
-          if [ "${{ github.event.inputs.use_splash }}" == "0" ]; then
+          # [2] INJEKSI PYTHON UNTUK MEMATIKAN SPLASH SCREEN (100% AKURAT)
+          if [ "$INPUT_USE_SPLASH" == "0" ]; then
             echo "Menonaktifkan Splash Screen (Set SPLASH_TIME jadi 0)..."
-            python3 -c "import re; f=open('app/src/main/java/com/curva/ppob/MainActivity.java', 'r'); c=f.read(); c=re.sub(r'public int SPLASH_TIME = \d+;', 'public int SPLASH_TIME = 0;', c); f.close(); f=open('app/src/main/java/com/curva/ppob/MainActivity.java', 'w'); f.write(c)"
+            python3 -c "
+          import re
+          with open('app/src/main/java/com/curva/ppob/MainActivity.java', 'r') as f:
+              c = f.read()
+          c = re.sub(r'public int SPLASH_TIME = \d+;', 'public int SPLASH_TIME = 0;', c)
+          with open('app/src/main/java/com/curva/ppob/MainActivity.java', 'w') as f:
+              f.write(c)
+          "
           fi
 
       - name: 2. Robot Upgrade Ke Google Code Scanner (Python)

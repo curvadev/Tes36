@@ -234,7 +234,11 @@ public class MainActivity extends Activity {
             splash.setVisibility(View.GONE);
             isAppUnlocked = true;
             checkNotificationPermission();
-            checkForAppUpdate();
+            
+            // CEK VERSI HANYA UNTUK MEMBER/USER (ADMIN DI-SKIP)
+            if (!getPackageName().toLowerCase().contains("admin")) {
+                checkForAppUpdate();
+            }
         }
 
         setupWebView();
@@ -409,7 +413,11 @@ public class MainActivity extends Activity {
             public void run() { 
                 splash.setVisibility(View.GONE); 
                 checkNotificationPermission(); 
-                checkForAppUpdate(); 
+                
+                // CEK VERSI HANYA UNTUK MEMBER/USER (ADMIN DI-SKIP)
+                if (!getPackageName().toLowerCase().contains("admin")) {
+                    checkForAppUpdate(); 
+                }
             }
         }, 500);
     }

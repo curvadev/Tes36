@@ -81,26 +81,40 @@ jobs:
       - name: Izin Eksekusi Gradle
         run: chmod +x gradlew
 
-      - name: 1. Menerapkan Konfigurasi Dasar & Injeksi Database (Mode Python Ampuh)
+      - name: 1. Menerapkan Konfigurasi Dasar & Injeksi Database (Mode Brute-Force)
         env:
           INPUT_APP_NAME: ${{ github.event.inputs.app_name }}
           INPUT_USE_SPLASH: ${{ github.event.inputs.use_splash }}
         run: |
           echo "Memproses Parameter Dinamis..."
           
-          # [1] INJEKSI PYTHON UNTUK MENGGANTI NAMA APLIKASI DI SELURUH FOLDER (100% AKURAT)
+          # [1] INJEKSI PYTHON UNTUK MENGGANTI NAMA APLIKASI SECARA PAKSA SAMPAI KE AKARNYA
           if [ -n "$INPUT_APP_NAME" ]; then
             echo "Mengganti Nama Aplikasi menjadi: $INPUT_APP_NAME"
-            python3 -c "
+            cat << 'EOF' > change_name.py
           import glob, re, os
-          name = os.environ.get('INPUT_APP_NAME', '')
+          name = os.environ.get('INPUT_APP_NAME', '').strip()
+
+          # 1. Hajar AndroidManifest.xml (Paling Ampuh mengubah nama di menu & recents)
+          m_path = 'app/src/main/AndroidManifest.xml'
+          if os.path.exists(m_path):
+              with open(m_path, 'r', encoding='utf-8') as f: 
+                  c = f.read()
+              # Mengubah android:label="..." menjadi nama baru secara paksa
+              c = re.sub(r'(android:label=")([^"]+)(")', r'\g<1>' + name + r'\g<3>', c)
+              with open(m_path, 'w', encoding='utf-8') as f: 
+                  f.write(c)
+
+          # 2. Hajar strings.xml (Sebagai pelengkap)
           for path in glob.glob('app/src/main/res/**/strings.xml', recursive=True):
-              with open(path, 'r', encoding='utf-8') as f:
-                  content = f.read()
-              content = re.sub(r'<string name=\"app_name\"[^>]*>[^<]+</string>', f'<string name=\"app_name\">{name}</string>', content)
-              with open(path, 'w', encoding='utf-8') as f:
-                  f.write(content)
-          "
+              with open(path, 'r', encoding='utf-8') as f: 
+                  c = f.read()
+              c = re.sub(r'<string\s+[^>]*name=[\'"]app_name[\'"][^>]*>.*?</string>', f'<string name="app_name">{name}</string>', c, flags=re.IGNORECASE|re.DOTALL)
+              c = c.replace('>Curva Payment<', f'>{name}<')
+              with open(path, 'w', encoding='utf-8') as f: 
+                  f.write(c)
+          EOF
+            python3 change_name.py
           fi
 
           if [ -n "${{ github.event.inputs.package_name }}" ]; then sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/g" app/build.gradle; fi
@@ -125,17 +139,18 @@ jobs:
             find app/src/main/res/values -name "colors.xml" -exec sed -i -E "s|<color name=\"colorAccent\">.+</color>|<color name=\"colorAccent\">${{ github.event.inputs.theme_color }}</color>|g" {} +
           fi
           
-          # [2] INJEKSI PYTHON UNTUK MEMATIKAN SPLASH SCREEN (100% AKURAT)
+          # [2] INJEKSI PYTHON UNTUK MEMATIKAN SPLASH SCREEN
           if [ "$INPUT_USE_SPLASH" == "0" ]; then
-            echo "Menonaktifkan Splash Screen (Set SPLASH_TIME jadi 0)..."
-            python3 -c "
+            echo "Menonaktifkan Splash Screen..."
+            cat << 'EOF' > remove_splash.py
           import re
-          with open('app/src/main/java/com/curva/ppob/MainActivity.java', 'r') as f:
+          with open('app/src/main/java/com/curva/ppob/MainActivity.java', 'r') as f: 
               c = f.read()
           c = re.sub(r'public int SPLASH_TIME = \d+;', 'public int SPLASH_TIME = 0;', c)
-          with open('app/src/main/java/com/curva/ppob/MainActivity.java', 'w') as f:
+          with open('app/src/main/java/com/curva/ppob/MainActivity.java', 'w') as f: 
               f.write(c)
-          "
+          EOF
+            python3 remove_splash.py
           fi
 
       - name: 2. Robot Upgrade Ke Google Code Scanner (Python)

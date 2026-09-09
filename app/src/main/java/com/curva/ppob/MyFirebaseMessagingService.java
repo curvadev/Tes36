@@ -11,7 +11,7 @@ import android.graphics.BitmapFactory;
 import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Build;
-import android.support.v4.app.NotificationCompat;
+import androidx.core.app.NotificationCompat; // Menggunakan AndroidX agar lebih stabil
 
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
@@ -100,26 +100,30 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         }
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, pendingFlags);
 
-        String channelId = "curva_payment_notif";
+        // ======================================================================
+        // PERBAIKAN: Gunakan ID baru dan bedakan antara User dan Admin
+        // Agar Android me-reset riwayat notifikasi dan memaksa pop-up melayang!
+        // ======================================================================
+        String channelId = getPackageName() + "_popup_v1"; 
+        
         Uri defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
-
         NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-
         Notification notification;
 
-        // [JALAN BERCABANG UNTUK LOLOS AIDE]
+        // [JALAN BERCABANG UNTUK HP LAMA DAN BARU]
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             // UNTUK HP BARU (ANDROID 8.0 KE ATAS)
-            NotificationChannel channel = new NotificationChannel(channelId, "Transaksi & Deposit", NotificationManager.IMPORTANCE_HIGH);
+            NotificationChannel channel = new NotificationChannel(channelId, "Notifikasi Transaksi", NotificationManager.IMPORTANCE_HIGH);
+            channel.enableVibration(true);
+            channel.setVibrationPattern(new long[]{0, 500, 200, 500});
             notificationManager.createNotificationChannel(channel);
 
             android.app.Notification.Builder builder = new android.app.Notification.Builder(this, channelId)
-                .setSmallIcon(R.drawable.ic_launcher)
+                .setSmallIcon(getResources().getIdentifier("ic_launcher", "drawable", getPackageName()))
                 .setContentTitle(title)
                 .setContentText(messageBody)
                 .setAutoCancel(true)
                 .setSound(defaultSoundUri)
-                .setVibrate(new long[]{1000, 1000})
                 .setContentIntent(pendingIntent);
 
             if (imageBitmap != null) {
@@ -134,14 +138,15 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
             notification = builder.build();
         } else {
             // UNTUK HP LAMA (DI BAWAH ANDROID 8.0)
-            NotificationCompat.Builder builder = new NotificationCompat.Builder(this)
-                .setSmallIcon(R.drawable.ic_launcher)
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(this, channelId)
+                .setSmallIcon(getResources().getIdentifier("ic_launcher", "drawable", getPackageName()))
                 .setContentTitle(title)
                 .setContentText(messageBody)
                 .setAutoCancel(true)
                 .setSound(defaultSoundUri)
-                .setVibrate(new long[]{1000, 1000})
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setVibrate(new long[]{0, 500, 200, 500})
+                .setPriority(NotificationCompat.PRIORITY_MAX) // Paksa melayang
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
                 .setContentIntent(pendingIntent);
 
             if (imageBitmap != null) {

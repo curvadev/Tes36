@@ -279,11 +279,13 @@ public class MainActivity extends Activity {
                 showOfflineScreen(view);
             }
 
-            @TargetApi(Build.VERSION_CODES.M)
+            @TargetApi(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? Build.VERSION_CODES.M : Build.VERSION_CODES.LOLLIPOP)
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                if (request.isForMainFrame()) { 
-                    showOfflineScreen(view); 
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    if (request.isForMainFrame()) { 
+                        showOfflineScreen(view); 
+                    }
                 }
             }
         });
@@ -422,17 +424,25 @@ public class MainActivity extends Activity {
         }, 500);
     }
 
+    // =======================================================
+    // PEMBARUAN: ID SALURAN DINAMIS AGAR NOTIF MELAYANG (HEADS-UP)
+    // =======================================================
     private void checkNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             android.app.NotificationManager notificationManager = (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (notificationManager != null) { 
-                notificationManager.createNotificationChannel(new android.app.NotificationChannel("curva_payment_notif", "Transaksi & Deposit", android.app.NotificationManager.IMPORTANCE_HIGH)); 
+                // Samakan dengan MyFirebaseMessagingService agar riwayat memori reset
+                String channelId = getPackageName() + "_popup_v1";
+                android.app.NotificationChannel channel = new android.app.NotificationChannel(channelId, "Notifikasi Transaksi", android.app.NotificationManager.IMPORTANCE_HIGH); 
+                channel.enableVibration(true);
+                notificationManager.createNotificationChannel(channel);
             }
         }
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) { 
             requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, REQUEST_NOTIFICATION_PERMISSION); 
         }
     }
+    // =======================================================
 
     private boolean isVersionOlder(String currentVersion, String serverVersion) {
         if (currentVersion == null || serverVersion == null) return false;

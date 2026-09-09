@@ -279,13 +279,14 @@ public class MainActivity extends Activity {
                 showOfflineScreen(view);
             }
 
-            @TargetApi(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? Build.VERSION_CODES.M : Build.VERSION_CODES.LOLLIPOP)
+            // =========================================================
+            // PERBAIKAN: Menggunakan nilai konstan untuk @TargetApi
+            // =========================================================
+            @TargetApi(Build.VERSION_CODES.M)
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    if (request.isForMainFrame()) { 
-                        showOfflineScreen(view); 
-                    }
+                if (request.isForMainFrame()) { 
+                    showOfflineScreen(view); 
                 }
             }
         });

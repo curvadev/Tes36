@@ -152,13 +152,13 @@ public class MainActivity extends Activity {
             }
         } catch (Exception e) {}
 
-        // Mengatur warna status bar dan navigation bar
+        // 1. Mengatur warna status bar dan navigation bar
         setSystemBarColors();
 
         FrameLayout root = new FrameLayout(this);
         root.setFitsSystemWindows(true);
-        // Mengubah warna dasar menjadi putih agar menyatu dengan bottom nav
-        root.setBackgroundColor(Color.WHITE);
+        // 2. KEMBALIKAN KE BIRU agar Status Bar di atas tidak ikut menjadi putih
+        root.setBackgroundColor(Color.parseColor("#1791f4"));
 
         webView = new WebView(this);
         root.addView(webView, new FrameLayout.LayoutParams(
@@ -237,7 +237,6 @@ public class MainActivity extends Activity {
             isAppUnlocked = true;
             checkNotificationPermission();
             
-            // CEK VERSI HANYA UNTUK MEMBER/USER (ADMIN DI-SKIP)
             if (!getPackageName().toLowerCase().contains("admin")) {
                 checkForAppUpdate();
             }
@@ -416,7 +415,6 @@ public class MainActivity extends Activity {
                 splash.setVisibility(View.GONE); 
                 checkNotificationPermission(); 
                 
-                // CEK VERSI HANYA UNTUK MEMBER/USER (ADMIN DI-SKIP)
                 if (!getPackageName().toLowerCase().contains("admin")) {
                     checkForAppUpdate(); 
                 }
@@ -424,9 +422,6 @@ public class MainActivity extends Activity {
         }, 500);
     }
 
-    // =======================================================
-    // PEMBARUAN: ID SALURAN DINAMIS AGAR NOTIF MELAYANG (HEADS-UP)
-    // =======================================================
     private void checkNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             android.app.NotificationManager notificationManager = (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
@@ -441,7 +436,6 @@ public class MainActivity extends Activity {
             requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, REQUEST_NOTIFICATION_PERMISSION); 
         }
     }
-    // =======================================================
 
     private boolean isVersionOlder(String currentVersion, String serverVersion) {
         if (currentVersion == null || serverVersion == null) return false;
@@ -1258,6 +1252,9 @@ public class MainActivity extends Activity {
         } 
     }
 
+    // =========================================================
+    // METODE WARNA SYSTEM BAR UNTUK ATAS BIRU DAN BAWAH PUTIH
+    // =========================================================
     private void setSystemBarColors() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             Window window = getWindow();
@@ -1267,14 +1264,12 @@ public class MainActivity extends Activity {
             // Status bar (Atas) tetap warna biru Curva
             window.setStatusBarColor(Color.parseColor("#1791f4"));
             
-            // Navigation bar (Bawah / area gesture) warna putih agar menyatu dengan bottom nav Webview
+            // Navigation bar (Bawah / area gesture) warna putih
             window.setNavigationBarColor(Color.WHITE);
             
-            // Set icon/garis gesture navigation bar menjadi gelap agar terlihat di background putih (Android 8+)
+            // Set icon/garis gesture navigation bar menjadi gelap (agar terlihat di atas putih)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
-            } else {
-                window.getDecorView().setSystemUiVisibility(0);
             }
         }
     }

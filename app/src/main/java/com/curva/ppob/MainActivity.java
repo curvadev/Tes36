@@ -152,19 +152,36 @@ public class MainActivity extends Activity {
             }
         } catch (Exception e) {}
 
-        // 1. Mengatur warna status bar dan navigation bar
+        // Mengatur status bar biru dan navigation bar putih
         setSystemBarColors();
 
+        // 1. ROOT UTAMA (Dibuat biru agar status bar di atas terjamin aman berwarna biru)
         FrameLayout root = new FrameLayout(this);
-        root.setFitsSystemWindows(true);
-        // 2. KEMBALIKAN KE BIRU agar Status Bar di atas tidak ikut menjadi putih
         root.setBackgroundColor(Color.parseColor("#1791f4"));
 
+        // 2. KOTAK PUTIH DI BAWAH (Khusus menutupi area gesture / navigation bar)
+        View bottomWhiteBg = new View(this);
+        bottomWhiteBg.setBackgroundColor(Color.WHITE);
+        int navHeight = (int) (100 * getResources().getDisplayMetrics().density); // Tinggi 100dp aman untuk semua HP
+        FrameLayout.LayoutParams bottomParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, navHeight);
+        bottomParams.gravity = Gravity.BOTTOM;
+        root.addView(bottomWhiteBg, bottomParams);
+
+        // 3. PEMBUNGKUS WEBVIEW (Merespons status bar dan nav bar agar tidak tertutup)
+        FrameLayout contentWrapper = new FrameLayout(this);
+        contentWrapper.setFitsSystemWindows(true);
+
         webView = new WebView(this);
-        root.addView(webView, new FrameLayout.LayoutParams(
+        contentWrapper.addView(webView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, 
                 FrameLayout.LayoutParams.MATCH_PARENT));
 
+        root.addView(contentWrapper, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, 
+                FrameLayout.LayoutParams.MATCH_PARENT));
+
+        // 4. SPLASH SCREEN (Menutupi seluruh layar di awal)
         splash = new RelativeLayout(this);
         splash.setBackgroundColor(Color.parseColor("#1791f4")); 
         splash.setClickable(true); 
@@ -180,12 +197,12 @@ public class MainActivity extends Activity {
         LinearLayout bottomLayout = new LinearLayout(this);
         bottomLayout.setOrientation(LinearLayout.VERTICAL);
         bottomLayout.setGravity(Gravity.CENTER);
-        RelativeLayout.LayoutParams bottomParams = new RelativeLayout.LayoutParams(
+        RelativeLayout.LayoutParams splashBottomParams = new RelativeLayout.LayoutParams(
                 RelativeLayout.LayoutParams.MATCH_PARENT, 
                 RelativeLayout.LayoutParams.WRAP_CONTENT);
-        bottomParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-        bottomParams.bottomMargin = (int) (40 * getResources().getDisplayMetrics().density);
-        splash.addView(bottomLayout, bottomParams);
+        splashBottomParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+        splashBottomParams.bottomMargin = (int) (40 * getResources().getDisplayMetrics().density);
+        splash.addView(bottomLayout, splashBottomParams);
 
         LinearLayout loadingRow = new LinearLayout(this);
         loadingRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -1253,7 +1270,7 @@ public class MainActivity extends Activity {
     }
 
     // =========================================================
-    // METODE WARNA SYSTEM BAR UNTUK ATAS BIRU DAN BAWAH PUTIH
+    // METODE PERBAIKAN WARNA STATUS BAR (DIJAMIN AMAN DARI PUTIH)
     // =========================================================
     private void setSystemBarColors() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -1261,15 +1278,14 @@ public class MainActivity extends Activity {
             window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS | WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
             window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
             
-            // Status bar (Atas) tetap warna biru Curva
             window.setStatusBarColor(Color.parseColor("#1791f4"));
-            
-            // Navigation bar (Bawah / area gesture) warna putih
             window.setNavigationBarColor(Color.WHITE);
             
-            // Set icon/garis gesture navigation bar menjadi gelap (agar terlihat di atas putih)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+                // Gunakan bitwise OR agar flag lain (seperti status bar) tidak terhapus
+                int flags = window.getDecorView().getSystemUiVisibility();
+                flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR; 
+                window.getDecorView().setSystemUiVisibility(flags);
             }
         }
     }

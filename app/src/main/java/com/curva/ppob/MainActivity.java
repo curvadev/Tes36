@@ -152,11 +152,13 @@ public class MainActivity extends Activity {
             }
         } catch (Exception e) {}
 
-        setStatusBarColor("#1791f4");
+        // Mengatur warna status bar dan navigation bar
+        setSystemBarColors();
 
         FrameLayout root = new FrameLayout(this);
         root.setFitsSystemWindows(true);
-        root.setBackgroundColor(Color.parseColor("#1791f4"));
+        // Mengubah warna dasar menjadi putih agar menyatu dengan bottom nav
+        root.setBackgroundColor(Color.WHITE);
 
         webView = new WebView(this);
         root.addView(webView, new FrameLayout.LayoutParams(
@@ -279,9 +281,6 @@ public class MainActivity extends Activity {
                 showOfflineScreen(view);
             }
 
-            // =========================================================
-            // PERBAIKAN: Menggunakan nilai konstan untuk @TargetApi
-            // =========================================================
             @TargetApi(Build.VERSION_CODES.M)
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
@@ -432,7 +431,6 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             android.app.NotificationManager notificationManager = (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (notificationManager != null) { 
-                // Samakan dengan MyFirebaseMessagingService agar riwayat memori reset
                 String channelId = getPackageName() + "_popup_v1";
                 android.app.NotificationChannel channel = new android.app.NotificationChannel(channelId, "Notifikasi Transaksi", android.app.NotificationManager.IMPORTANCE_HIGH); 
                 channel.enableVibration(true);
@@ -1260,13 +1258,24 @@ public class MainActivity extends Activity {
         } 
     }
 
-    private void setStatusBarColor(String color) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) { 
-            Window window = getWindow(); 
-            window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS); 
-            window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS); 
-            window.setStatusBarColor(Color.parseColor(color)); 
-            window.getDecorView().setSystemUiVisibility(0); 
+    private void setSystemBarColors() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            Window window = getWindow();
+            window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS | WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
+            window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+            
+            // Status bar (Atas) tetap warna biru Curva
+            window.setStatusBarColor(Color.parseColor("#1791f4"));
+            
+            // Navigation bar (Bawah / area gesture) warna putih agar menyatu dengan bottom nav Webview
+            window.setNavigationBarColor(Color.WHITE);
+            
+            // Set icon/garis gesture navigation bar menjadi gelap agar terlihat di background putih (Android 8+)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+            } else {
+                window.getDecorView().setSystemUiVisibility(0);
+            }
         }
     }
 

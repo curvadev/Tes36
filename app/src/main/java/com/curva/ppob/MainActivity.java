@@ -3,15 +3,18 @@ package com.curva.ppob;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.DownloadManager;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothClass;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
@@ -24,6 +27,7 @@ import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.provider.ContactsContract;
 import androidx.core.content.FileProvider;
@@ -99,6 +103,9 @@ public class MainActivity extends Activity {
     public int SPLASH_TIME = 3000;
     // =======================================================
 
+    // Variabel untuk Update Aplikasi
+    private long downloadUpdateId = -1;
+
     private String getHomeUrl() {
         String url = APP_URL;
         if (!url.endsWith("/")) url += "/";
@@ -159,11 +166,11 @@ public class MainActivity extends Activity {
         // Mengatur status bar biru dan navigation bar putih
         setSystemBarColors();
 
-        // 1. ROOT UTAMA (Dibuat biru agar status bar di atas terjamin aman berwarna biru)
+        // 1. ROOT UTAMA
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.parseColor("#1791f4"));
 
-        // 2. KOTAK PUTIH DI BAWAH (Khusus menutupi area gesture / navigation bar)
+        // 2. KOTAK PUTIH DI BAWAH
         View bottomWhiteBg = new View(this);
         bottomWhiteBg.setBackgroundColor(Color.WHITE);
         int navHeight = (int) (100 * getResources().getDisplayMetrics().density);
@@ -172,15 +179,13 @@ public class MainActivity extends Activity {
         bottomParams.gravity = Gravity.BOTTOM;
         root.addView(bottomWhiteBg, bottomParams);
 
-        // 3. PEMBUNGKUS WEBVIEW (Merespons status bar dan nav bar agar tidak tertutup)
+        // 3. PEMBUNGKUS WEBVIEW
         FrameLayout contentWrapper = new FrameLayout(this);
         contentWrapper.setFitsSystemWindows(true);
 
         webView = new WebView(this);
         
-        // =================================================================
         // FIX 1: MATIKAN AUTOFILL / SARAN EMAIL & SANDI DI ANDROID 8.0+
-        // =================================================================
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             webView.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
         }
@@ -193,7 +198,7 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT, 
                 FrameLayout.LayoutParams.MATCH_PARENT));
 
-        // 4. SPLASH SCREEN (Menutupi seluruh layar di awal)
+        // 4. SPLASH SCREEN
         splash = new RelativeLayout(this);
         splash.setBackgroundColor(Color.parseColor("#1791f4")); 
         splash.setClickable(true); 
@@ -336,9 +341,7 @@ public class MainActivity extends Activity {
             }, SPLASH_TIME);
         }
 
-        // =================================================================
         // FIX 2: MENDUKUNG GESTURE BACK ANDROID 13+ (API 33 KE ATAS)
-        // =================================================================
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
                 OnBackInvokedDispatcher.PRIORITY_DEFAULT,
@@ -385,7 +388,6 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    // Handler untuk menangani tombol back (dipanggil dari OnBackInvokedDispatcher atau onKeyDown)
     private void handleCustomBack() {
         if (webView != null) {
             webView.evaluateJavascript("javascript:(function() { var overlays = document.querySelectorAll('.show'); if (overlays.length > 0) { overlays.forEach(function(el) { el.classList.remove('show'); }); return 'true'; } return 'false'; })()", new ValueCallback<String>() {
@@ -530,98 +532,93 @@ public class MainActivity extends Activity {
         }).start();
     }
 
+    // =================================================================
+    // UPDATE: Memanggil modal dari Web (Dashboard) alih-alih dialog native
+    // =================================================================
     private void showUpdateDialog(final boolean isForced, final String url, String notes) {
-        final android.app.Dialog dialog = new android.app.Dialog(MainActivity.this); 
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE); 
-        dialog.setCancelable(!isForced);
-        if (dialog.getWindow() != null) { 
-            dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)); 
+        String escapedNotes = notes.replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
+        String js = "javascript:showUpdateModal('" + url + "', '" + escapedNotes + "', " + isForced + ")";
+        webView.evaluateJavascript(js, null);
+    }
+
+    // =================================================================
+    // LOGIKA BARU: DOWNLOAD APK & INSTALL OTOMATIS (DOWNLOAD MANAGER)
+    // =================================================================
+    private BroadcastReceiver updateDownloadReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
+            if (id == downloadUpdateId) {
+                try {
+                    DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                    Uri uri = dm.getUriForDownloadedFile(id);
+                    if (uri != null) {
+                        Intent install = new Intent(Intent.ACTION_VIEW);
+                        install.setDataAndType(uri, "application/vnd.android.package-archive");
+                        install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        startActivity(install);
+                    }
+                } catch (Exception e) {
+                    showToast("Gagal membuka installer: " + e.getMessage());
+                }
+            }
         }
-        
-        LinearLayout root = new LinearLayout(this); 
-        root.setOrientation(LinearLayout.VERTICAL); 
-        root.setPadding(60, 60, 60, 60);
-        
-        android.graphics.drawable.GradientDrawable bgShape = new android.graphics.drawable.GradientDrawable(); 
-        bgShape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE); 
-        bgShape.setCornerRadius(50); 
-        bgShape.setColor(Color.WHITE); 
-        root.setBackground(bgShape);
-        
-        TextView title = new TextView(this); 
-        title.setText("Pembaruan Tersedia \uD83D\uDE80"); 
-        title.setTextSize(22); 
-        title.setTextColor(Color.parseColor("#1e293b")); 
-        title.setTypeface(null, android.graphics.Typeface.BOLD); 
-        title.setGravity(Gravity.CENTER); 
-        root.addView(title);
-        
-        TextView message = new TextView(this); 
-        message.setText(notes); 
-        message.setTextSize(15); 
-        message.setTextColor(Color.parseColor("#64748b")); 
-        message.setGravity(Gravity.LEFT); 
-        message.setLineSpacing(0, 1.2f);
-        
-        LinearLayout.LayoutParams msgParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 
-                LinearLayout.LayoutParams.WRAP_CONTENT); 
-        msgParams.setMargins(0, 50, 0, 60); 
-        root.addView(message, msgParams);
-        
-        TextView btnUpdate = new TextView(this); 
-        btnUpdate.setText("Perbarui Sekarang"); 
-        btnUpdate.setTextColor(Color.WHITE); 
-        btnUpdate.setTextSize(16); 
-        btnUpdate.setTypeface(null, android.graphics.Typeface.BOLD); 
-        btnUpdate.setGravity(Gravity.CENTER); 
-        btnUpdate.setPadding(0, 35, 0, 35);
-        
-        android.graphics.drawable.GradientDrawable btnShape = new android.graphics.drawable.GradientDrawable(); 
-        btnShape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE); 
-        btnShape.setCornerRadius(50); 
-        btnShape.setColor(Color.parseColor("#1791f4")); 
-        btnUpdate.setBackground(btnShape);
-        
-        btnUpdate.setOnClickListener(new View.OnClickListener() { 
-            @Override 
-            public void onClick(View v) { 
-                dialog.dismiss(); 
-                try { 
-                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse((url != null && !url.isEmpty()) ? url : "https://curva.web.id/download.php"))); 
-                } catch (Exception e) {} 
-            } 
-        }); 
-        root.addView(btnUpdate);
-        
-        if (!isForced) {
-            TextView btnLater = new TextView(this); 
-            btnLater.setText("Nanti Saja"); 
-            btnLater.setTextColor(Color.parseColor("#94a3b8")); 
-            btnLater.setTextSize(15); 
-            btnLater.setTypeface(null, android.graphics.Typeface.BOLD); 
-            btnLater.setGravity(Gravity.CENTER); 
-            btnLater.setPadding(0, 25, 0, 25);
+    };
+
+    private void downloadApkNative(String url) {
+        try {
+            File apkFile = new File(getExternalFilesDir(null), "update.apk");
+            if (apkFile.exists()) apkFile.delete();
+
+            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+            request.setTitle("Update Curva Payment");
+            request.setDescription("Sedang mengunduh pembaruan aplikasi...");
+            request.setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, "update.apk");
             
-            LinearLayout.LayoutParams laterParams = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, 
-                    LinearLayout.LayoutParams.WRAP_CONTENT); 
-            laterParams.setMargins(0, 30, 0, 0);
-            
-            btnLater.setOnClickListener(new View.OnClickListener() { 
-                @Override 
-                public void onClick(View v) { 
-                    dialog.dismiss(); 
-                } 
-            }); 
-            root.addView(btnLater, laterParams);
+            DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+            downloadUpdateId = dm.enqueue(request);
+
+            IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(updateDownloadReceiver, filter, Context.RECEIVER_EXPORTED);
+            } else {
+                registerReceiver(updateDownloadReceiver, filter);
+            }
+
+            // Memantau progress unduhan
+            new Thread(() -> {
+                boolean isDownloading = true;
+                while (isDownloading) {
+                    DownloadManager.Query query = new DownloadManager.Query();
+                    query.setFilterById(downloadUpdateId);
+                    Cursor cursor = dm.query(query);
+                    if (cursor != null && cursor.moveToFirst()) {
+                        int status = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS));
+                        int bytesDownloaded = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+                        int bytesTotal = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+                        
+                        if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                            isDownloading = false;
+                            runOnUiThread(() -> webView.evaluateJavascript("javascript:onDownloadComplete()", null));
+                        } else if (status == DownloadManager.STATUS_FAILED) {
+                            isDownloading = false;
+                            runOnUiThread(() -> showToast("Unduhan gagal."));
+                        } else {
+                            if (bytesTotal > 0) {
+                                int progress = (int) ((bytesDownloaded * 100L) / bytesTotal);
+                                runOnUiThread(() -> webView.evaluateJavascript("javascript:updateDownloadProgress(" + progress + ")", null));
+                            }
+                        }
+                        cursor.close();
+                    }
+                    try { Thread.sleep(300); } catch (Exception e) {}
+                }
+            }).start();
+
+        } catch (Exception e) {
+            showToast("Gagal memulai unduhan: " + e.getMessage());
         }
-        
-        dialog.setContentView(root); 
-        if (dialog.getWindow() != null) { 
-            dialog.getWindow().setLayout((int) (getResources().getDisplayMetrics().widthPixels * 0.85), android.view.ViewGroup.LayoutParams.WRAP_CONTENT); 
-        } 
-        dialog.show();
     }
 
     private void showOfflineScreen(WebView view) {
@@ -682,7 +679,8 @@ public class MainActivity extends Activity {
                 "updateFCMToken: function() { prompt('AndroidBridge:updateFCMToken', ''); }," +
                 "setAppLock: function(status) { prompt('AndroidBridge:setAppLock', status); }," +
                 "getPrinters: function() { return prompt('AndroidBridge:getPrinters', ''); }," +
-                "printReceiptMAC: function(data) { prompt('AndroidBridge:printReceiptMAC', data); }" +
+                "printReceiptMAC: function(data) { prompt('AndroidBridge:printReceiptMAC', data); }," +
+                "downloadApp: function(url) { prompt('AndroidBridge:downloadApp', url); }" + 
                 "}; } })()";
         webView.evaluateJavascript(js, null);
     }
@@ -729,6 +727,10 @@ public class MainActivity extends Activity {
                 return true; 
             } else if (action.equals("setAppLock")) { 
                 getSharedPreferences("CurvaPrefs", MODE_PRIVATE).edit().putBoolean("is_app_lock_enabled", defaultValue.equals("true")).apply(); 
+                result.confirm(""); 
+                return true; 
+            } else if (action.equals("downloadApp")) { 
+                downloadApkNative(defaultValue); 
                 result.confirm(""); 
                 return true; 
             } else if (action.equals("retryConnection")) { 
@@ -807,9 +809,7 @@ public class MainActivity extends Activity {
         settings.setAllowContentAccess(true);
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         
-        // =================================================================
         // FIX 2: MATIKAN FITUR PENYIMPANAN FORM & PASSWORD BAWAAN WEBVIEW
-        // =================================================================
         settings.setSaveFormData(false);
         settings.setSavePassword(false);
 
@@ -1290,9 +1290,6 @@ public class MainActivity extends Activity {
         } 
     }
 
-    // =========================================================
-    // METODE PERBAIKAN WARNA STATUS BAR (DIJAMIN AMAN DARI PUTIH)
-    // =========================================================
     private void setSystemBarColors() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             Window window = getWindow();
@@ -1303,7 +1300,6 @@ public class MainActivity extends Activity {
             window.setNavigationBarColor(Color.WHITE);
             
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                // Gunakan bitwise OR agar flag lain (seperti status bar) tidak terhapus
                 int flags = window.getDecorView().getSystemUiVisibility();
                 flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR; 
                 window.getDecorView().setSystemUiVisibility(flags);

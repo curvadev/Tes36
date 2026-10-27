@@ -50,7 +50,7 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-// IMPORT BARU UNTUK ANDROID 13+ GESTURE BACK
+// IMPORT UNTUK GESTURE BACK ANDROID 13+
 import android.window.OnBackInvokedDispatcher;
 import android.window.OnBackInvokedCallback;
 
@@ -166,7 +166,7 @@ public class MainActivity extends Activity {
         // 2. KOTAK PUTIH DI BAWAH (Khusus menutupi area gesture / navigation bar)
         View bottomWhiteBg = new View(this);
         bottomWhiteBg.setBackgroundColor(Color.WHITE);
-        int navHeight = (int) (100 * getResources().getDisplayMetrics().density); // Tinggi 100dp aman untuk semua HP
+        int navHeight = (int) (100 * getResources().getDisplayMetrics().density);
         FrameLayout.LayoutParams bottomParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, navHeight);
         bottomParams.gravity = Gravity.BOTTOM;
@@ -177,6 +177,14 @@ public class MainActivity extends Activity {
         contentWrapper.setFitsSystemWindows(true);
 
         webView = new WebView(this);
+        
+        // =================================================================
+        // FIX 1: MATIKAN AUTOFILL / SARAN EMAIL & SANDI DI ANDROID 8.0+
+        // =================================================================
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            webView.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
+        }
+
         contentWrapper.addView(webView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, 
                 FrameLayout.LayoutParams.MATCH_PARENT));
@@ -329,7 +337,7 @@ public class MainActivity extends Activity {
         }
 
         // =================================================================
-        // TAMBAHAN: MENDUKUNG GESTURE BACK ANDROID 13+ (API 33 KE ATAS)
+        // FIX 2: MENDUKUNG GESTURE BACK ANDROID 13+ (API 33 KE ATAS)
         // =================================================================
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
@@ -377,21 +385,16 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    // CATATAN: Method onKeyDown dan onBackPressed LAMA sudah dihapus / dikomentari
-    // karena sekarang kita menggunakan OnBackInvokedDispatcher di atas.
-
+    // Handler untuk menangani tombol back (dipanggil dari OnBackInvokedDispatcher atau onKeyDown)
     private void handleCustomBack() {
         if (webView != null) {
-            // Cek jika ada modal/overlay dengan class 'show' (seperti bottom sheet di web)
             webView.evaluateJavascript("javascript:(function() { var overlays = document.querySelectorAll('.show'); if (overlays.length > 0) { overlays.forEach(function(el) { el.classList.remove('show'); }); return 'true'; } return 'false'; })()", new ValueCallback<String>() {
                 @Override
                 public void onReceiveValue(String value) {
                     if (!"\"true\"".equals(value) && !"true".equals(value)) {
-                        // Jika tidak ada modal, coba kembali ke halaman web sebelumnya
                         if (webView.canGoBack()) { 
                             webView.goBack(); 
                         } else { 
-                            // Jika tidak ada riwayat web, jalankan tekan 2x untuk keluar
                             performDoubleBackToExit(); 
                         }
                     }
@@ -803,6 +806,13 @@ public class MainActivity extends Activity {
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        
+        // =================================================================
+        // FIX 2: MATIKAN FITUR PENYIMPANAN FORM & PASSWORD BAWAAN WEBVIEW
+        // =================================================================
+        settings.setSaveFormData(false);
+        settings.setSavePassword(false);
+
         settings.setAppCacheEnabled(true);
         settings.setAppCachePath(getApplicationContext().getCacheDir().getAbsolutePath());
         settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);

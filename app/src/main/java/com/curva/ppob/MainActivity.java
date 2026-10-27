@@ -3,18 +3,15 @@ package com.curva.ppob;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.app.DownloadManager;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothClass;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.ActivityNotFoundException;
-import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
@@ -64,6 +61,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -93,12 +91,16 @@ public class MainActivity extends Activity {
     private boolean isAppUnlocked = false;
     private boolean doubleBackToExitPressedOnce = false;
     private boolean hasCheckedUpdate = false; 
+    
+    // Variabel penampung data update sementara (agar instan saat web siap)
+    private boolean isUpdateAvailable = false;
+    private String serverVersionName = "";
+    private String serverUpdateUrl = "";
+    private String serverReleaseNotes = "";
+    private boolean serverForceUpdate = false;
 
     private String APP_URL = "https://curva.web.id/ppob/"; 
     public int SPLASH_TIME = 3000;
-
-    private long downloadUpdateId = -1;
-    private boolean isUpdateDialogShown = false; // Mencegah dialog ganda
 
     private String getHomeUrl() {
         String url = APP_URL;
@@ -245,6 +247,9 @@ public class MainActivity extends Activity {
         setupWebView();
         setupCookies();
         loadFcmToken();
+        
+        // CEK UPDATE DARI AWAL (SEBELUM WEB DIMUAT)
+        checkForAppUpdate();
 
         webView.setWebViewClient(new WebViewClient() {
             @SuppressWarnings("deprecation")
@@ -271,15 +276,11 @@ public class MainActivity extends Activity {
                 saveCookies(); 
                 injectAndroidBridge(); 
                 sendFcmTokenToWeb();
-
-                if (!hasCheckedUpdate && !getPackageName().toLowerCase().contains("admin")) {
-                    hasCheckedUpdate = true; 
-                    new Handler().postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                            checkForAppUpdate();
-                        }
-                    }, 1500); // Tunda 1.5 detik
+                
+                // JIKA DATA UPDATE SUDAH SIAP, LANGSUNG TAMPILKAN MODAL WEB TANPA DELAY
+                if (isUpdateAvailable) {
+                    showUpdateDialog(serverForceUpdate, serverUpdateUrl, serverReleaseNotes);
+                    isUpdateAvailable = false; // Reset agar tidak looping
                 }
             }
 
@@ -478,20 +479,27 @@ public class MainActivity extends Activity {
                             }
                             
                             final String serverVersion = data.optString("latest_version_name", data.optString("version_name", data.optString("version", "1.0.0"))); 
-                            final boolean forceUpdate = data.optBoolean("force_update", data.optBoolean("force", false)); 
-                            final String updateUrl = data.optString("update_url", data.optString("url", "")); 
-                            final String releaseNotes = data.optString("release_notes", data.optString("notes", "Pembaruan tersedia.")); 
-                            
                             final String currentVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
                             
-                            runOnUiThread(new Runnable() { 
-                                @Override 
-                                public void run() { 
-                                    if (isVersionOlder(currentVersion, serverVersion) && !isFinishing()) { 
-                                        showUpdateDialog(forceUpdate, updateUrl, releaseNotes); 
+                            if (isVersionOlder(currentVersion, serverVersion) && !isFinishing()) {
+                                // Simpan data ke variabel sementara
+                                isUpdateAvailable = true;
+                                serverVersionName = serverVersion;
+                                serverForceUpdate = data.optBoolean("force_update", data.optBoolean("force", false)); 
+                                serverUpdateUrl = data.optString("update_url", data.optString("url", "")); 
+                                serverReleaseNotes = data.optString("release_notes", data.optString("notes", "Pembaruan tersedia.")); 
+                                
+                                // Jika web sudah selesai dimuat (misal cek update terlambat), langsung tampilkan
+                                runOnUiThread(new Runnable() { 
+                                    @Override 
+                                    public void run() { 
+                                        if (webView != null && webView.getUrl() != null && webView.getUrl().contains("dashboard.php")) {
+                                            showUpdateDialog(serverForceUpdate, serverUpdateUrl, serverReleaseNotes);
+                                            isUpdateAvailable = false;
+                                        }
                                     } 
-                                } 
-                            });
+                                });
+                            }
                         }
                     }
                 } catch (Exception e) {
@@ -501,152 +509,88 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    // =================================================================
-    // MEMANGGIL DIALOG WEB, DENGAN NATIVE FALLBACK JIKA GAGAL
-    // =================================================================
+    // Memanggil Modal Web (Tanpa Native Fallback)
     private void showUpdateDialog(final boolean isForced, final String url, String notes) {
-        if (isUpdateDialogShown) return;
-        isUpdateDialogShown = true;
-
         String escapedNotes = notes.replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
         
-        // 1. Coba Panggil Modal Cantik dari Dashboard.php
+        // Gunakan window.showUpdateModal yang ada di Dashboard.php
         String js = "javascript:(function(){" +
-                "var attempts = 0;" +
-                "var interval = setInterval(function() {" +
-                "  if (typeof window.initUpdateCheck === 'function') {" +
-                "    clearInterval(interval);" +
-                "    window.initUpdateCheck('" + url + "', '" + escapedNotes + "', " + isForced + ");" +
-                "  } else if (typeof window.showUpdateModal === 'function') {" +
-                "    clearInterval(interval);" +
-                "    window.showUpdateModal('" + url + "', '" + escapedNotes + "', " + isForced + ");" +
-                "  } else if (attempts > 20) { " +
-                "    clearInterval(interval);" +
-                "    if (typeof Android !== 'undefined' && typeof Android.showNativeUpdate === 'function') {" +
-                "      Android.showNativeUpdate('" + url + "', '" + escapedNotes + "', " + isForced + ");" +
-                "    }" +
-                "  }" +
-                "  attempts++;" +
-                "}, 500);" +
+                "if (typeof window.showUpdateModal === 'function') {" +
+                "  window.showUpdateModal('" + url + "', '" + escapedNotes + "', " + isForced + ");" +
+                "}" +
                 "})()";
         webView.evaluateJavascript(js, null);
     }
 
     // =================================================================
-    // NATIVE FALLBACK DIALOG (MUNCUL JIKA WEB GAGAL)
+    // DOWNLOAD MANUAL & INSTALL VIA FILEPROVIDER
     // =================================================================
-    private void showNativeUpdateFallback(String url, String notes, boolean isForced) {
-        try {
-            AlertDialog.Builder builder = new AlertDialog.Builder(this);
-            builder.setTitle("Pembaruan Tersedia 🚀");
-            builder.setMessage(notes);
-            builder.setCancelable(!isForced);
-            
-            builder.setPositiveButton("Update Sekarang", new DialogInterface.OnClickListener() {
-                @Override
-                public void onClick(DialogInterface dialog, int which) {
-                    dialog.dismiss();
-                    if (url.contains("play.google.com") || url.startsWith("market://")) {
-                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
-                    } else {
-                        downloadApkNative(url);
-                    }
-                }
-            });
-            
-            if (!isForced) {
-                builder.setNegativeButton("Nanti Saja", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        dialog.dismiss();
-                    }
-                });
-            }
-            builder.show();
-        } catch (Exception e) {
-            showToast("Pembaruan tersedia, silakan update aplikasi.");
+    private void downloadApkNative(String url) {
+        if (url.contains("play.google.com") || url.startsWith("market://")) {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+            return;
         }
+
+        showToast("Mulai mengunduh pembaruan...");
+        
+        new Thread(() -> {
+            try {
+                URL apkUrl = new URL(url);
+                HttpURLConnection conn = (HttpURLConnection) apkUrl.openConnection();
+                conn.connect();
+
+                int fileLength = conn.getContentLength();
+                File apkFile = new File(getExternalFilesDir(null), "update_app.apk");
+                
+                if (apkFile.exists()) apkFile.delete();
+                
+                FileOutputStream fos = new FileOutputStream(apkFile);
+                InputStream input = conn.getInputStream();
+                
+                byte data[] = new byte[4096];
+                long total = 0;
+                int count;
+                int lastProgress = 0;
+                
+                while ((count = input.read(data)) != -1) {
+                    total += count;
+                    if (fileLength > 0) {
+                        int progress = (int) ((total * 100) / fileLength);
+                        if (progress != lastProgress) {
+                            lastProgress = progress;
+                            final int finalProgress = progress;
+                            runOnUiThread(() -> {
+                                if (webView != null) webView.evaluateJavascript("javascript:updateDownloadProgress(" + finalProgress + ")", null);
+                            });
+                        }
+                    }
+                    fos.write(data, 0, count);
+                }
+                fos.flush();
+                fos.close();
+                input.close();
+
+                runOnUiThread(() -> {
+                    if (webView != null) webView.evaluateJavascript("javascript:onDownloadComplete()", null);
+                    installApk(apkFile);
+                });
+
+            } catch (Exception e) {
+                runOnUiThread(() -> showToast("Gagal mengunduh: " + e.getMessage()));
+            }
+        }).start();
     }
 
-    private BroadcastReceiver updateDownloadReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
-            if (id == downloadUpdateId) {
-                try {
-                    DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
-                    Uri uri = dm.getUriForDownloadedFile(id);
-                    if (uri != null) {
-                        Intent install = new Intent(Intent.ACTION_VIEW);
-                        install.setDataAndType(uri, "application/vnd.android.package-archive");
-                        install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                        startActivity(install);
-                    }
-                } catch (Exception e) {
-                    showToast("Gagal membuka installer: " + e.getMessage());
-                }
-            }
-        }
-    };
-
-    private void downloadApkNative(String url) {
+    private void installApk(File apkFile) {
         try {
-            if (url.contains("play.google.com") || url.startsWith("market://")) {
-                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                startActivity(intent);
-                return;
-            }
-
-            File apkFile = new File(getExternalFilesDir(null), "update.apk");
-            if (apkFile.exists()) apkFile.delete();
-
-            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
-            request.setTitle("Update Curva Payment");
-            request.setDescription("Sedang mengunduh pembaruan aplikasi...");
-            request.setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, "update.apk");
-            
-            DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
-            downloadUpdateId = dm.enqueue(request);
-
-            IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                registerReceiver(updateDownloadReceiver, filter, Context.RECEIVER_EXPORTED);
-            } else {
-                registerReceiver(updateDownloadReceiver, filter);
-            }
-
-            new Thread(() -> {
-                boolean isDownloading = true;
-                while (isDownloading) {
-                    DownloadManager.Query query = new DownloadManager.Query();
-                    query.setFilterById(downloadUpdateId);
-                    Cursor cursor = dm.query(query);
-                    if (cursor != null && cursor.moveToFirst()) {
-                        int status = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS));
-                        int bytesDownloaded = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
-                        int bytesTotal = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
-                        
-                        if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                            isDownloading = false;
-                            runOnUiThread(() -> webView.evaluateJavascript("javascript:onDownloadComplete()", null));
-                        } else if (status == DownloadManager.STATUS_FAILED) {
-                            isDownloading = false;
-                            runOnUiThread(() -> showToast("Unduhan gagal."));
-                        } else {
-                            if (bytesTotal > 0) {
-                                int progress = (int) ((bytesDownloaded * 100L) / bytesTotal);
-                                runOnUiThread(() -> webView.evaluateJavascript("javascript:updateDownloadProgress(" + progress + ")", null));
-                            }
-                        }
-                        cursor.close();
-                    }
-                    try { Thread.sleep(300); } catch (Exception e) {}
-                }
-            }).start();
-
+            Uri apkUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", apkFile);
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
         } catch (Exception e) {
-            showToast("Gagal memulai unduhan: " + e.getMessage());
+            showToast("Gagal membuka installer: " + e.getMessage());
         }
     }
 
@@ -704,8 +648,7 @@ public class MainActivity extends Activity {
                 "setAppLock: function(status) { prompt('AndroidBridge:setAppLock', status); }," +
                 "getPrinters: function() { return prompt('AndroidBridge:getPrinters', ''); }," +
                 "printReceiptMAC: function(data) { prompt('AndroidBridge:printReceiptMAC', data); }," +
-                "downloadApp: function(url) { prompt('AndroidBridge:downloadApp', url); }," +
-                "showNativeUpdate: function(url, notes, force) { prompt('AndroidBridge:showNativeUpdate', url + '|||SPLIT|||' + notes + '|||SPLIT|||' + force); }" + 
+                "downloadApp: function(url) { prompt('AndroidBridge:downloadApp', url); }" +
                 "}; } })()";
         webView.evaluateJavascript(js, null);
     }
@@ -724,15 +667,6 @@ public class MainActivity extends Activity {
             else if (action.equals("updateFCMToken")) { runOnUiThread(() -> sendFcmTokenToWeb()); result.confirm(""); return true; }
             else if (action.equals("setAppLock")) { getSharedPreferences("CurvaPrefs", MODE_PRIVATE).edit().putBoolean("is_app_lock_enabled", defaultValue.equals("true")).apply(); result.confirm(""); return true; }
             else if (action.equals("downloadApp")) { downloadApkNative(defaultValue); result.confirm(""); return true; }
-            else if (action.equals("showNativeUpdate")) { 
-                String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|");
-                String url = parts.length > 0 ? parts[0] : "";
-                String notes = parts.length > 1 ? parts[1] : "Pembaruan tersedia.";
-                boolean force = parts.length > 2 && Boolean.parseBoolean(parts[2]);
-                showNativeUpdateFallback(url, notes, force); 
-                result.confirm(""); 
-                return true; 
-            }
             else if (action.equals("retryConnection")) { 
                 runOnUiThread(() -> {
                     if (isNetworkAvailable()) { webView.loadUrl(getHomeUrl()); } 

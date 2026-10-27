@@ -52,7 +52,6 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-// IMPORT UNTUK GESTURE BACK ANDROID 13+
 import android.window.OnBackInvokedDispatcher;
 import android.window.OnBackInvokedCallback;
 
@@ -95,20 +94,15 @@ public class MainActivity extends Activity {
     private boolean doubleBackToExitPressedOnce = false;
     private boolean hasCheckedUpdate = false; 
 
-    // =======================================================
-    // TARGET GITHUB ACTIONS (JANGAN UBAH BARIS INI MANUAL)
-    // =======================================================
     private String APP_URL = "https://curva.web.id/ppob/"; 
     public int SPLASH_TIME = 3000;
-    // =======================================================
 
-    // Variabel untuk Update Aplikasi
     private long downloadUpdateId = -1;
+    private boolean isUpdateDialogShown = false; // Mencegah dialog ganda
 
     private String getHomeUrl() {
         String url = APP_URL;
         if (!url.endsWith("/")) url += "/";
-        
         if (getPackageName().toLowerCase().contains("admin")) {
             if (!url.endsWith(".php")) url += "login.php";
         } else {
@@ -170,8 +164,7 @@ public class MainActivity extends Activity {
         View bottomWhiteBg = new View(this);
         bottomWhiteBg.setBackgroundColor(Color.WHITE);
         int navHeight = (int) (100 * getResources().getDisplayMetrics().density);
-        FrameLayout.LayoutParams bottomParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, navHeight);
+        FrameLayout.LayoutParams bottomParams = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, navHeight);
         bottomParams.gravity = Gravity.BOTTOM;
         root.addView(bottomWhiteBg, bottomParams);
 
@@ -184,13 +177,8 @@ public class MainActivity extends Activity {
             webView.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
         }
 
-        contentWrapper.addView(webView, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, 
-                FrameLayout.LayoutParams.MATCH_PARENT));
-
-        root.addView(contentWrapper, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, 
-                FrameLayout.LayoutParams.MATCH_PARENT));
+        contentWrapper.addView(webView, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        root.addView(contentWrapper, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
         splash = new RelativeLayout(this);
         splash.setBackgroundColor(Color.parseColor("#1791f4")); 
@@ -200,16 +188,12 @@ public class MainActivity extends Activity {
         ImageView bgImage = new ImageView(this);
         bgImage.setImageResource(getResources().getIdentifier("splash_logo", "drawable", getPackageName()));
         bgImage.setScaleType(ImageView.ScaleType.CENTER_CROP); 
-        splash.addView(bgImage, new RelativeLayout.LayoutParams(
-                RelativeLayout.LayoutParams.MATCH_PARENT, 
-                RelativeLayout.LayoutParams.MATCH_PARENT));
+        splash.addView(bgImage, new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.MATCH_PARENT));
 
         LinearLayout bottomLayout = new LinearLayout(this);
         bottomLayout.setOrientation(LinearLayout.VERTICAL);
         bottomLayout.setGravity(Gravity.CENTER);
-        RelativeLayout.LayoutParams splashBottomParams = new RelativeLayout.LayoutParams(
-                RelativeLayout.LayoutParams.MATCH_PARENT, 
-                RelativeLayout.LayoutParams.WRAP_CONTENT);
+        RelativeLayout.LayoutParams splashBottomParams = new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.WRAP_CONTENT);
         splashBottomParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
         splashBottomParams.bottomMargin = (int) (40 * getResources().getDisplayMetrics().density);
         splash.addView(bottomLayout, splashBottomParams);
@@ -219,10 +203,7 @@ public class MainActivity extends Activity {
         loadingRow.setGravity(Gravity.CENTER);
 
         ModernSpinner spinner = new ModernSpinner(this); 
-        LinearLayout.LayoutParams spinnerParams = new LinearLayout.LayoutParams(
-                (int) (20 * getResources().getDisplayMetrics().density),
-                (int) (20 * getResources().getDisplayMetrics().density)
-        );
+        LinearLayout.LayoutParams spinnerParams = new LinearLayout.LayoutParams((int) (20 * getResources().getDisplayMetrics().density), (int) (20 * getResources().getDisplayMetrics().density));
         spinnerParams.rightMargin = (int) (8 * getResources().getDisplayMetrics().density);
         spinner.setLayoutParams(spinnerParams);
 
@@ -248,15 +229,11 @@ public class MainActivity extends Activity {
         version.setTextSize(11);
         version.setShadowLayer(3, 1, 1, Color.parseColor("#40000000"));
         
-        LinearLayout.LayoutParams vParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, 
-                LinearLayout.LayoutParams.WRAP_CONTENT);
+        LinearLayout.LayoutParams vParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         vParams.topMargin = (int) (12 * getResources().getDisplayMetrics().density); 
         bottomLayout.addView(version, vParams);
 
-        root.addView(splash, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, 
-                FrameLayout.LayoutParams.MATCH_PARENT));
+        root.addView(splash, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(root);
 
         if (SPLASH_TIME <= 0) {
@@ -273,8 +250,7 @@ public class MainActivity extends Activity {
             @SuppressWarnings("deprecation")
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                if (url.startsWith("intent://") || url.startsWith("market://") || 
-                    url.startsWith("whatsapp://") || url.startsWith("tg://")) {
+                if (url.startsWith("intent://") || url.startsWith("market://") || url.startsWith("whatsapp://") || url.startsWith("tg://")) {
                     try { 
                         view.getContext().startActivity(Intent.parseUri(url, Intent.URI_INTENT_SCHEME)); 
                         return true; 
@@ -298,13 +274,12 @@ public class MainActivity extends Activity {
 
                 if (!hasCheckedUpdate && !getPackageName().toLowerCase().contains("admin")) {
                     hasCheckedUpdate = true; 
-                    // Tunda 2 detik agar HTML dan JS Dashboard benar-benar siap
                     new Handler().postDelayed(new Runnable() {
                         @Override
                         public void run() {
                             checkForAppUpdate();
                         }
-                    }, 2000);
+                    }, 1500); // Tunda 1.5 detik
                 }
             }
 
@@ -362,14 +337,11 @@ public class MainActivity extends Activity {
                     URL url = new URL(getRootApiUrl() + "api/cache_version.txt?t=" + System.currentTimeMillis());
                     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                     conn.setConnectTimeout(5000);
-                    
                     if (conn.getResponseCode() == 200) {
                         BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
                         final String serverVersion = br.readLine().trim();
                         br.close();
-
                         final String localVersion = getSharedPreferences("CurvaPrefs", MODE_PRIVATE).getString("native_cache_version", "");
-                        
                         if (!serverVersion.isEmpty() && !serverVersion.equals(localVersion)) {
                             runOnUiThread(new Runnable() {
                                 @Override
@@ -407,33 +379,24 @@ public class MainActivity extends Activity {
     }
 
     private void performDoubleBackToExit() {
-        if (doubleBackToExitPressedOnce) { 
-            finish(); 
-            return; 
-        }
+        if (doubleBackToExitPressedOnce) { finish(); return; }
         this.doubleBackToExitPressedOnce = true;
         showToast("Tekan sekali lagi untuk keluar aplikasi");
         new Handler().postDelayed(new Runnable() { 
             @Override 
-            public void run() { 
-                doubleBackToExitPressedOnce = false; 
-            } 
+            public void run() { doubleBackToExitPressedOnce = false; } 
         }, 2000);
     }
 
     private void triggerNativeAppLock() {
         if (isAppUnlocked) return;
         if (!getSharedPreferences("CurvaPrefs", MODE_PRIVATE).getBoolean("is_app_lock_enabled", false)) {
-            unlockAppAndHideSplash(); 
-            return;
+            unlockAppAndHideSplash(); return;
         }
         android.app.KeyguardManager keyguardManager = (android.app.KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && keyguardManager != null && keyguardManager.isKeyguardSecure()) {
             Intent intent = keyguardManager.createConfirmDeviceCredentialIntent("Keamanan Curva Payment", "Gunakan identitas Anda untuk masuk.");
-            if (intent != null) { 
-                startActivityForResult(intent, REQUEST_APP_LOCK); 
-                return; 
-            }
+            if (intent != null) { startActivityForResult(intent, REQUEST_APP_LOCK); return; }
         }
         unlockAppAndHideSplash();
     }
@@ -471,16 +434,13 @@ public class MainActivity extends Activity {
             String[] currentParts = currentVersion.replaceAll("[^0-9.]", "").split("\\."); 
             String[] serverParts = serverVersion.replaceAll("[^0-9.]", "").split("\\.");
             int length = Math.max(currentParts.length, serverParts.length);
-            
             for (int i = 0; i < length; i++) {
                 int currentPart = i < currentParts.length ? Integer.parseInt(currentParts[i]) : 0; 
                 int serverPart = i < serverParts.length ? Integer.parseInt(serverParts[i]) : 0;
                 if (currentPart < serverPart) { return true; } 
                 if (currentPart > serverPart) { return false; }
             } 
-        } catch (Exception e) {
-            return false;
-        }
+        } catch (Exception e) { return false; }
         return false;
     }
 
@@ -496,6 +456,8 @@ public class MainActivity extends Activity {
                     conn.setUseCaches(false); 
                     conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"); 
                     conn.setRequestProperty("Accept", "application/json"); 
+                    conn.setRequestProperty("Cache-Control", "no-cache");
+                    conn.setRequestProperty("Pragma", "no-cache");
                     conn.setConnectTimeout(8000); 
                     conn.setReadTimeout(8000);
                     
@@ -503,18 +465,22 @@ public class MainActivity extends Activity {
                         BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream())); 
                         StringBuilder response = new StringBuilder(); 
                         String line;
-                        while ((line = reader.readLine()) != null) { 
-                            response.append(line); 
-                        } 
+                        while ((line = reader.readLine()) != null) { response.append(line); } 
                         reader.close();
                         
                         JSONObject json = new JSONObject(response.toString());
-                        
-                        if (json.has("success") && json.getBoolean("success")) {
-                            final String serverVersion = json.optString("latest_version_name", "1.0.0"); 
-                            final boolean forceUpdate = json.optBoolean("force_update", false); 
-                            final String updateUrl = json.optString("update_url", ""); 
-                            final String releaseNotes = json.optString("release_notes", "Pembaruan tersedia."); 
+                        boolean isSuccess = (json.has("success") && json.optBoolean("success")) || (json.has("status") && json.optString("status").equalsIgnoreCase("success"));
+                            
+                        if (isSuccess) {
+                            JSONObject data = json;
+                            if (json.has("data") && json.get("data") instanceof JSONObject) {
+                                data = json.getJSONObject("data");
+                            }
+                            
+                            final String serverVersion = data.optString("latest_version_name", data.optString("version_name", data.optString("version", "1.0.0"))); 
+                            final boolean forceUpdate = data.optBoolean("force_update", data.optBoolean("force", false)); 
+                            final String updateUrl = data.optString("update_url", data.optString("url", "")); 
+                            final String releaseNotes = data.optString("release_notes", data.optString("notes", "Pembaruan tersedia.")); 
                             
                             final String currentVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
                             
@@ -536,17 +502,72 @@ public class MainActivity extends Activity {
     }
 
     // =================================================================
-    // FUNGSI PENENGAH: Menunggu JS Dashboard siap sebelum memanggil modal
+    // MEMANGGIL DIALOG WEB, DENGAN NATIVE FALLBACK JIKA GAGAL
     // =================================================================
     private void showUpdateDialog(final boolean isForced, final String url, String notes) {
+        if (isUpdateDialogShown) return;
+        isUpdateDialogShown = true;
+
         String escapedNotes = notes.replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
         
-        // Memanggil fungsi pembantu di Dashboard.php
-        String js = "javascript:if(typeof initUpdateCheck === 'function') { initUpdateCheck('" + url + "', '" + escapedNotes + "', " + isForced + "); }";
+        // 1. Coba Panggil Modal Cantik dari Dashboard.php
+        String js = "javascript:(function(){" +
+                "var attempts = 0;" +
+                "var interval = setInterval(function() {" +
+                "  if (typeof window.initUpdateCheck === 'function') {" +
+                "    clearInterval(interval);" +
+                "    window.initUpdateCheck('" + url + "', '" + escapedNotes + "', " + isForced + ");" +
+                "  } else if (typeof window.showUpdateModal === 'function') {" +
+                "    clearInterval(interval);" +
+                "    window.showUpdateModal('" + url + "', '" + escapedNotes + "', " + isForced + ");" +
+                "  } else if (attempts > 20) { " +
+                "    clearInterval(interval);" +
+                "    if (typeof Android !== 'undefined' && typeof Android.showNativeUpdate === 'function') {" +
+                "      Android.showNativeUpdate('" + url + "', '" + escapedNotes + "', " + isForced + ");" +
+                "    }" +
+                "  }" +
+                "  attempts++;" +
+                "}, 500);" +
+                "})()";
         webView.evaluateJavascript(js, null);
     }
 
-    // LOGIKA DOWNLOAD APK
+    // =================================================================
+    // NATIVE FALLBACK DIALOG (MUNCUL JIKA WEB GAGAL)
+    // =================================================================
+    private void showNativeUpdateFallback(String url, String notes, boolean isForced) {
+        try {
+            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+            builder.setTitle("Pembaruan Tersedia 🚀");
+            builder.setMessage(notes);
+            builder.setCancelable(!isForced);
+            
+            builder.setPositiveButton("Update Sekarang", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    dialog.dismiss();
+                    if (url.contains("play.google.com") || url.startsWith("market://")) {
+                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                    } else {
+                        downloadApkNative(url);
+                    }
+                }
+            });
+            
+            if (!isForced) {
+                builder.setNegativeButton("Nanti Saja", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        dialog.dismiss();
+                    }
+                });
+            }
+            builder.show();
+        } catch (Exception e) {
+            showToast("Pembaruan tersedia, silakan update aplikasi.");
+        }
+    }
+
     private BroadcastReceiver updateDownloadReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -641,11 +662,8 @@ public class MainActivity extends Activity {
         if (intent != null && intent.getExtras() != null) {
             String newUrl = handleDeepLink(intent);
             if (!newUrl.equals(getHomeUrl())) { 
-                if (isNetworkAvailable()) { 
-                    webView.loadUrl(newUrl); 
-                } else { 
-                    showOfflineScreen(webView); 
-                } 
+                if (isNetworkAvailable()) { webView.loadUrl(newUrl); } 
+                else { showOfflineScreen(webView); } 
             }
         }
     }
@@ -659,9 +677,7 @@ public class MainActivity extends Activity {
                 urlToLoad = getRootApiUrl() + (notifId != null ? "user/notifications.php?show_id=" + notifId : "user/notifications.php");
             } else if ("transaction_success".equals(type) || "transaction_failed".equals(type)) {
                 String trxId = intent.getStringExtra("transaction_id"); 
-                if (trxId != null) { 
-                    urlToLoad = getRootApiUrl() + "user/transaction_detail.php?id=" + trxId; 
-                }
+                if (trxId != null) { urlToLoad = getRootApiUrl() + "user/transaction_detail.php?id=" + trxId; }
             } else if (intent.hasExtra("target_url")) {
                 String target = intent.getStringExtra("target_url"); 
                 if (target != null && !target.isEmpty()) { 
@@ -688,7 +704,8 @@ public class MainActivity extends Activity {
                 "setAppLock: function(status) { prompt('AndroidBridge:setAppLock', status); }," +
                 "getPrinters: function() { return prompt('AndroidBridge:getPrinters', ''); }," +
                 "printReceiptMAC: function(data) { prompt('AndroidBridge:printReceiptMAC', data); }," +
-                "downloadApp: function(url) { prompt('AndroidBridge:downloadApp', url); }" + 
+                "downloadApp: function(url) { prompt('AndroidBridge:downloadApp', url); }," +
+                "showNativeUpdate: function(url, notes, force) { prompt('AndroidBridge:showNativeUpdate', url + '|||SPLIT|||' + notes + '|||SPLIT|||' + force); }" + 
                 "}; } })()";
         webView.evaluateJavascript(js, null);
     }
@@ -707,6 +724,15 @@ public class MainActivity extends Activity {
             else if (action.equals("updateFCMToken")) { runOnUiThread(() -> sendFcmTokenToWeb()); result.confirm(""); return true; }
             else if (action.equals("setAppLock")) { getSharedPreferences("CurvaPrefs", MODE_PRIVATE).edit().putBoolean("is_app_lock_enabled", defaultValue.equals("true")).apply(); result.confirm(""); return true; }
             else if (action.equals("downloadApp")) { downloadApkNative(defaultValue); result.confirm(""); return true; }
+            else if (action.equals("showNativeUpdate")) { 
+                String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|");
+                String url = parts.length > 0 ? parts[0] : "";
+                String notes = parts.length > 1 ? parts[1] : "Pembaruan tersedia.";
+                boolean force = parts.length > 2 && Boolean.parseBoolean(parts[2]);
+                showNativeUpdateFallback(url, notes, force); 
+                result.confirm(""); 
+                return true; 
+            }
             else if (action.equals("retryConnection")) { 
                 runOnUiThread(() -> {
                     if (isNetworkAvailable()) { webView.loadUrl(getHomeUrl()); } 
@@ -1112,6 +1138,7 @@ public class MainActivity extends Activity {
             Window window = getWindow();
             window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS | WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
             window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+            
             window.setStatusBarColor(Color.parseColor("#1791f4"));
             window.setNavigationBarColor(Color.WHITE);
             

@@ -21,7 +21,6 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
-import android.graphics.PorterDuff;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
@@ -37,21 +36,18 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
-import android.webkit.ConsoleMessage;
 import android.webkit.CookieManager;
 import android.webkit.JsPromptResult;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
-import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -97,7 +93,7 @@ public class MainActivity extends Activity {
 
     private boolean isAppUnlocked = false;
     private boolean doubleBackToExitPressedOnce = false;
-    private boolean hasCheckedUpdate = false; // Flag agar cek update hanya jalan sekali
+    private boolean hasCheckedUpdate = false; 
 
     // =======================================================
     // TARGET GITHUB ACTIONS (JANGAN UBAH BARIS INI MANUAL)
@@ -184,7 +180,6 @@ public class MainActivity extends Activity {
 
         webView = new WebView(this);
         
-        // FIX: Matikan Autofill / saran sandi
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             webView.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
         }
@@ -301,16 +296,15 @@ public class MainActivity extends Activity {
                 injectAndroidBridge(); 
                 sendFcmTokenToWeb();
 
-                // PENGECEKAN UPDATE DIPINDAH KE SINI AGAR JS DASHBOARD SUDAH SIAP
                 if (!hasCheckedUpdate && !getPackageName().toLowerCase().contains("admin")) {
                     hasCheckedUpdate = true; 
-                    // Beri jeda 1 detik agar JS Dashboard selesai dimuat sempurna
+                    // Tunda 2 detik agar HTML dan JS Dashboard benar-benar siap
                     new Handler().postDelayed(new Runnable() {
                         @Override
                         public void run() {
                             checkForAppUpdate();
                         }
-                    }, 1000);
+                    }, 2000);
                 }
             }
 
@@ -347,7 +341,6 @@ public class MainActivity extends Activity {
             }, SPLASH_TIME);
         }
 
-        // Gesture Back Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
                 OnBackInvokedDispatcher.PRIORITY_DEFAULT,
@@ -475,7 +468,6 @@ public class MainActivity extends Activity {
     private boolean isVersionOlder(String currentVersion, String serverVersion) {
         if (currentVersion == null || serverVersion == null) return false;
         try {
-            // Bersihkan string dari karakter aneh (misal "15.0.3-beta" jadi "15.0.3")
             String[] currentParts = currentVersion.replaceAll("[^0-9.]", "").split("\\."); 
             String[] serverParts = serverVersion.replaceAll("[^0-9.]", "").split("\\.");
             int length = Math.max(currentParts.length, serverParts.length);
@@ -519,15 +511,12 @@ public class MainActivity extends Activity {
                         JSONObject json = new JSONObject(response.toString());
                         
                         if (json.has("success") && json.getBoolean("success")) {
-                            // Ambil data dengan optString/optBoolean agar tidak crash jika key tidak ada
                             final String serverVersion = json.optString("latest_version_name", "1.0.0"); 
                             final boolean forceUpdate = json.optBoolean("force_update", false); 
                             final String updateUrl = json.optString("update_url", ""); 
                             final String releaseNotes = json.optString("release_notes", "Pembaruan tersedia."); 
                             
                             final String currentVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-                            
-                            Log.d("CEK_UPDATE", "Versi HP: " + currentVersion + " | Versi Server: " + serverVersion);
                             
                             runOnUiThread(new Runnable() { 
                                 @Override 
@@ -546,9 +535,14 @@ public class MainActivity extends Activity {
         }).start();
     }
 
+    // =================================================================
+    // FUNGSI PENENGAH: Menunggu JS Dashboard siap sebelum memanggil modal
+    // =================================================================
     private void showUpdateDialog(final boolean isForced, final String url, String notes) {
         String escapedNotes = notes.replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
-        String js = "javascript:if(typeof showUpdateModal === 'function') { showUpdateModal('" + url + "', '" + escapedNotes + "', " + isForced + "); } else { alert('Modal update belum siap, silakan restart aplikasi.'); }";
+        
+        // Memanggil fungsi pembantu di Dashboard.php
+        String js = "javascript:if(typeof initUpdateCheck === 'function') { initUpdateCheck('" + url + "', '" + escapedNotes + "', " + isForced + "); }";
         webView.evaluateJavascript(js, null);
     }
 
@@ -577,7 +571,6 @@ public class MainActivity extends Activity {
 
     private void downloadApkNative(String url) {
         try {
-            // Jika URL adalah Play Store, langsung buka Play Store
             if (url.contains("play.google.com") || url.startsWith("market://")) {
                 Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                 startActivity(intent);
@@ -602,7 +595,6 @@ public class MainActivity extends Activity {
                 registerReceiver(updateDownloadReceiver, filter);
             }
 
-            // Memantau progress unduhan
             new Thread(() -> {
                 boolean isDownloading = true;
                 while (isDownloading) {
@@ -705,112 +697,54 @@ public class MainActivity extends Activity {
         if (message != null && message.startsWith("AndroidBridge:")) {
             String action = message.replace("AndroidBridge:", "");
             
-            if (action.equals("getContacts")) { 
-                result.confirm(getContactsFromDevice()); 
-                return true; 
-            } else if (action.equals("requestContactPermission")) { 
-                requestContactPermission(); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("showToast")) { 
-                showToast(defaultValue); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("openContactPicker")) { 
-                openContactPicker(); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("scanBarcode")) { 
-                scanBarcode(); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("shareImage")) { 
-                shareImage(defaultValue); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("openApp")) { 
-                openAppNative(defaultValue); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("updateFCMToken")) { 
-                runOnUiThread(new Runnable() { 
-                    @Override 
-                    public void run() { 
-                        sendFcmTokenToWeb(); 
-                    } 
-                }); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("setAppLock")) { 
-                getSharedPreferences("CurvaPrefs", MODE_PRIVATE).edit().putBoolean("is_app_lock_enabled", defaultValue.equals("true")).apply(); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("downloadApp")) { 
-                downloadApkNative(defaultValue); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("retryConnection")) { 
-                runOnUiThread(new Runnable() { 
-                    @Override 
-                    public void run() { 
-                        if (isNetworkAvailable()) { 
-                            webView.loadUrl(getHomeUrl()); 
-                        } else { 
-                            showToast("Koneksi internet masih terputus."); 
-                        } 
-                    } 
-                }); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("shareReceiptText")) { 
-                String base64Str = defaultValue; 
-                String captionStr = "Berikut adalah bukti pembayaran."; 
+            if (action.equals("getContacts")) { result.confirm(getContactsFromDevice()); return true; }
+            else if (action.equals("requestContactPermission")) { requestContactPermission(); result.confirm(""); return true; }
+            else if (action.equals("showToast")) { showToast(defaultValue); result.confirm(""); return true; }
+            else if (action.equals("openContactPicker")) { openContactPicker(); result.confirm(""); return true; }
+            else if (action.equals("scanBarcode")) { scanBarcode(); result.confirm(""); return true; }
+            else if (action.equals("shareImage")) { shareImage(defaultValue); result.confirm(""); return true; }
+            else if (action.equals("openApp")) { openAppNative(defaultValue); result.confirm(""); return true; }
+            else if (action.equals("updateFCMToken")) { runOnUiThread(() -> sendFcmTokenToWeb()); result.confirm(""); return true; }
+            else if (action.equals("setAppLock")) { getSharedPreferences("CurvaPrefs", MODE_PRIVATE).edit().putBoolean("is_app_lock_enabled", defaultValue.equals("true")).apply(); result.confirm(""); return true; }
+            else if (action.equals("downloadApp")) { downloadApkNative(defaultValue); result.confirm(""); return true; }
+            else if (action.equals("retryConnection")) { 
+                runOnUiThread(() -> {
+                    if (isNetworkAvailable()) { webView.loadUrl(getHomeUrl()); } 
+                    else { showToast("Koneksi internet masih terputus."); }
+                }); result.confirm(""); return true; 
+            }
+            else if (action.equals("shareReceiptText")) { 
+                String base64Str = defaultValue; String captionStr = "Berikut adalah bukti pembayaran."; 
                 if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) { 
                     String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|"); 
-                    base64Str = parts.length > 0 ? parts[0] : ""; 
-                    captionStr = parts.length > 1 ? parts[1] : ""; 
+                    base64Str = parts.length > 0 ? parts[0] : ""; captionStr = parts.length > 1 ? parts[1] : ""; 
                 } 
-                shareReceiptText(base64Str, captionStr); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("saveImage")) { 
-                String base64Str = defaultValue; 
-                String fileNameStr = "QRIS_Deposit.png"; 
+                shareReceiptText(base64Str, captionStr); result.confirm(""); return true; 
+            }
+            else if (action.equals("saveImage")) { 
+                String base64Str = defaultValue; String fileNameStr = "QRIS_Deposit.png"; 
                 if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) { 
                     String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|"); 
-                    base64Str = parts.length > 0 ? parts[0] : ""; 
-                    fileNameStr = parts.length > 1 ? parts[1] : "QRIS_Deposit.png"; 
+                    base64Str = parts.length > 0 ? parts[0] : ""; fileNameStr = parts.length > 1 ? parts[1] : "QRIS_Deposit.png"; 
                 } 
-                saveImage(base64Str, fileNameStr); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("printReceipt")) { 
-                String textToPrint = defaultValue; 
-                String logoBase64 = ""; 
+                saveImage(base64Str, fileNameStr); result.confirm(""); return true; 
+            }
+            else if (action.equals("printReceipt")) { 
+                String textToPrint = defaultValue; String logoBase64 = ""; 
                 if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) { 
                     String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|"); 
-                    textToPrint = parts.length > 0 ? parts[0] : ""; 
-                    logoBase64 = parts.length > 1 ? parts[1] : ""; 
+                    textToPrint = parts.length > 0 ? parts[0] : ""; logoBase64 = parts.length > 1 ? parts[1] : ""; 
                 } 
-                autoPrintReceipt(textToPrint, logoBase64); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("getPrinters")) { 
-                result.confirm(getPairedPrintersList()); 
-                return true; 
-            } else if (action.equals("printReceiptMAC")) { 
-                String textToPrint = ""; 
-                String logoBase64 = ""; 
-                String macAddress = ""; 
+                autoPrintReceipt(textToPrint, logoBase64); result.confirm(""); return true; 
+            }
+            else if (action.equals("getPrinters")) { result.confirm(getPairedPrintersList()); return true; }
+            else if (action.equals("printReceiptMAC")) { 
+                String textToPrint = ""; String logoBase64 = ""; String macAddress = ""; 
                 if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) { 
                     String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|"); 
-                    textToPrint = parts.length > 0 ? parts[0] : ""; 
-                    logoBase64 = parts.length > 1 ? parts[1] : ""; 
-                    macAddress = parts.length > 2 ? parts[2] : ""; 
+                    textToPrint = parts.length > 0 ? parts[0] : ""; logoBase64 = parts.length > 1 ? parts[1] : ""; macAddress = parts.length > 2 ? parts[2] : ""; 
                 } 
-                printToSpecificPrinter(textToPrint, logoBase64, macAddress); 
-                result.confirm(""); 
-                return true; 
+                printToSpecificPrinter(textToPrint, logoBase64, macAddress); result.confirm(""); return true; 
             }
         }
         return false;
@@ -824,10 +758,8 @@ public class MainActivity extends Activity {
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        
         settings.setSaveFormData(false);
         settings.setSavePassword(false);
-
         settings.setAppCacheEnabled(true);
         settings.setAppCachePath(getApplicationContext().getCacheDir().getAbsolutePath());
         settings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
@@ -841,16 +773,8 @@ public class MainActivity extends Activity {
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
-            public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
-                Log.d("WebViewConsole", consoleMessage.message() + " -- From line " + consoleMessage.lineNumber() + " of " + consoleMessage.sourceId());
-                return true;
-            }
-
-            @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
-                if (MainActivity.this.filePathCallback != null) {
-                    MainActivity.this.filePathCallback.onReceiveValue(null);
-                }
+                if (MainActivity.this.filePathCallback != null) { MainActivity.this.filePathCallback.onReceiveValue(null); }
                 MainActivity.this.filePathCallback = filePathCallback;
                 String[] acceptTypes = fileChooserParams.getAcceptTypes();
                 Intent intent;
@@ -868,20 +792,13 @@ public class MainActivity extends Activity {
                 }
 
                 Intent chooserIntent = Intent.createChooser(intent, chooserTitle);
-                try {
-                    startActivityForResult(chooserIntent, FILE_CHOOSER_REQUEST);
-                    return true;
-                } catch (ActivityNotFoundException e) {
-                    MainActivity.this.filePathCallback = null;
-                    return false;
-                }
+                try { startActivityForResult(chooserIntent, FILE_CHOOSER_REQUEST); return true; } 
+                catch (ActivityNotFoundException e) { MainActivity.this.filePathCallback = null; return false; }
             }
 
             @Override
             public boolean onJsPrompt(WebView view, String url, String message, String defaultValue, JsPromptResult result) {
-                if (MainActivity.this.handleAndroidBridge(message, defaultValue, result)) {
-                    return true;
-                }
+                if (MainActivity.this.handleAndroidBridge(message, defaultValue, result)) { return true; }
                 return super.onJsPrompt(view, url, message, defaultValue, result);
             }
         });
@@ -889,26 +806,17 @@ public class MainActivity extends Activity {
 
     private String getPairedPrintersList() {
         final BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) { 
-            return "NOT_SUPPORTED"; 
-        }
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) { return "NOT_SUPPORTED"; }
         if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission("android.permission.BLUETOOTH_CONNECT") != PackageManager.PERMISSION_GRANTED) { 
-            requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT"}, REQUEST_BLUETOOTH_PERMISSION); 
-            return "[]"; 
+            requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT"}, REQUEST_BLUETOOTH_PERMISSION); return "[]"; 
         }
-        
-        JSONArray arr = new JSONArray(); 
-        Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
-        
+        JSONArray arr = new JSONArray(); Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
         for (BluetoothDevice device : pairedDevices) {
             try { 
                 String name = device.getName() != null ? device.getName() : "Printer"; 
                 int majorClass = device.getBluetoothClass() != null ? device.getBluetoothClass().getMajorDeviceClass() : -1; 
                 if (majorClass == BluetoothClass.Device.Major.IMAGING || name.toLowerCase().contains("print") || name.toLowerCase().contains("mtp") || name.toLowerCase().contains("zj") || name.toLowerCase().contains("58") || name.toLowerCase().contains("80") || name.toLowerCase().contains("pt-") || name.toLowerCase().contains("blue")) { 
-                    JSONObject obj = new JSONObject(); 
-                    obj.put("name", name); 
-                    obj.put("mac", device.getAddress()); 
-                    arr.put(obj); 
+                    JSONObject obj = new JSONObject(); obj.put("name", name); obj.put("mac", device.getAddress()); arr.put(obj); 
                 } 
             } catch (Exception e) {}
         }
@@ -918,13 +826,10 @@ public class MainActivity extends Activity {
     private void printToSpecificPrinter(final String textToPrint, final String logoBase64, final String macAddress) {
         final BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
         if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled() || macAddress == null || macAddress.isEmpty()) { 
-            notifyWebPrintFailed("Gagal menyambung. Bluetooth tidak aktif atau MAC salah."); 
-            return; 
+            notifyWebPrintFailed("Gagal menyambung. Bluetooth tidak aktif atau MAC salah."); return; 
         }
-        
         new Thread(new Runnable() {
-            @Override 
-            public void run() {
+            @Override public void run() {
                 try {
                     BluetoothDevice device = bluetoothAdapter.getRemoteDevice(macAddress); 
                     UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"); 
@@ -936,8 +841,7 @@ public class MainActivity extends Activity {
                             byte[] decodedString = Base64.decode(pureBase64, Base64.DEFAULT); 
                             Bitmap bitmap = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length); 
                             if(bitmap != null){ 
-                                int targetWidth = 360; 
-                                targetWidth = (targetWidth / 8) * 8; 
+                                int targetWidth = 360; targetWidth = (targetWidth / 8) * 8; 
                                 int targetHeight = (int) (bitmap.getHeight() * ((float) targetWidth / bitmap.getWidth())); 
                                 Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true); 
                                 imageBytes = decodeBitmapToEscPos(scaledBitmap); 
@@ -945,108 +849,63 @@ public class MainActivity extends Activity {
                         } catch (Exception e) {} 
                     }
                     
-                    BluetoothSocket socket = device.createRfcommSocketToServiceRecord(uuid); 
-                    socket.connect(); 
-                    OutputStream outputStream = socket.getOutputStream(); 
-                    outputStream.write(new byte[]{27, 64}); 
+                    BluetoothSocket socket = device.createRfcommSocketToServiceRecord(uuid); socket.connect(); 
+                    OutputStream outputStream = socket.getOutputStream(); outputStream.write(new byte[]{27, 64}); 
                     
                     if (imageBytes != null) { 
-                        outputStream.write(new byte[]{27, 97, 1}); 
-                        outputStream.flush(); 
+                        outputStream.write(new byte[]{27, 97, 1}); outputStream.flush(); 
                         int chunkSize = 256; 
                         for (int i = 0; i < imageBytes.length; i += chunkSize) { 
                             int length = Math.min(chunkSize, imageBytes.length - i); 
-                            outputStream.write(imageBytes, i, length); 
-                            outputStream.flush(); 
-                            Thread.sleep(15); 
+                            outputStream.write(imageBytes, i, length); outputStream.flush(); Thread.sleep(15); 
                         } 
-                        outputStream.write("\n\n".getBytes()); 
-                        outputStream.flush(); 
-                        Thread.sleep(400); 
+                        outputStream.write("\n\n".getBytes()); outputStream.flush(); Thread.sleep(400); 
                     }
                     
-                    outputStream.write(textToPrint.getBytes("UTF-8")); 
-                    outputStream.write("\n\n\n".getBytes()); 
-                    outputStream.flush(); 
-                    socket.close(); 
-                    
+                    outputStream.write(textToPrint.getBytes("UTF-8")); outputStream.write("\n\n\n".getBytes()); outputStream.flush(); socket.close(); 
                     final String pName = device.getName(); 
-                    runOnUiThread(new Runnable() { 
-                        @Override 
-                        public void run() { 
-                            webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(true, 'Berhasil mencetak di printer: " + pName + "');}", null); 
-                        } 
-                    });
-                } catch (Exception e) { 
-                    notifyWebPrintFailed("Gagal terhubung ke printer. Pastikan printer menyala."); 
-                }
+                    runOnUiThread(new Runnable() { @Override public void run() { 
+                        webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(true, 'Berhasil mencetak di printer: " + pName + "');}", null); 
+                    }});
+                } catch (Exception e) { notifyWebPrintFailed("Gagal terhubung ke printer. Pastikan printer menyala."); }
             }
         }).start();
     }
 
     private void notifyWebPrintFailed(final String msg) { 
-        runOnUiThread(new Runnable() { 
-            @Override 
-            public void run() { 
-                webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(false, '" + msg + "');}", null); 
-            } 
-        }); 
+        runOnUiThread(new Runnable() { @Override public void run() { 
+            webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(false, '" + msg + "');}", null); 
+        }}); 
     }
 
     private void autoPrintReceipt(final String textToPrint, final String logoBase64) {
         final BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (bluetoothAdapter == null) { 
-            notifyWebPrintFailed("Perangkat tidak mendukung Bluetooth"); 
-            return; 
-        }
-        if (!bluetoothAdapter.isEnabled()) { 
-            notifyWebPrintFailed("Silakan aktifkan Bluetooth HP Anda"); 
-            return; 
-        }
+        if (bluetoothAdapter == null) { notifyWebPrintFailed("Perangkat tidak mendukung Bluetooth"); return; }
+        if (!bluetoothAdapter.isEnabled()) { notifyWebPrintFailed("Silakan aktifkan Bluetooth HP Anda"); return; }
         if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission("android.permission.BLUETOOTH_CONNECT") != PackageManager.PERMISSION_GRANTED) { 
-            requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT"}, REQUEST_BLUETOOTH_PERMISSION); 
-            notifyWebPrintFailed("Izin Bluetooth belum diberikan"); 
-            return; 
+            requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT"}, REQUEST_BLUETOOTH_PERMISSION); notifyWebPrintFailed("Izin Bluetooth belum diberikan"); return; 
         }
         
         final Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices(); 
-        if (pairedDevices.size() == 0) { 
-            notifyWebPrintFailed("Belum ada printer yang di-pairing"); 
-            return; 
-        }
+        if (pairedDevices.size() == 0) { notifyWebPrintFailed("Belum ada printer yang di-pairing"); return; }
         
-        final ArrayList<BluetoothDevice> likelyPrinters = new ArrayList<>(); 
-        final ArrayList<BluetoothDevice> otherDevices = new ArrayList<>();
-        
+        final ArrayList<BluetoothDevice> likelyPrinters = new ArrayList<>(); final ArrayList<BluetoothDevice> otherDevices = new ArrayList<>();
         for (BluetoothDevice device : pairedDevices) { 
             String name = device.getName() != null ? device.getName().toLowerCase() : ""; 
             int majorClass = device.getBluetoothClass() != null ? device.getBluetoothClass().getMajorDeviceClass() : -1; 
-            if (majorClass == BluetoothClass.Device.Major.AUDIO_VIDEO || majorClass == BluetoothClass.Device.Major.PHONE || majorClass == BluetoothClass.Device.Major.COMPUTER) { 
-                continue; 
-            } 
+            if (majorClass == BluetoothClass.Device.Major.AUDIO_VIDEO || majorClass == BluetoothClass.Device.Major.PHONE || majorClass == BluetoothClass.Device.Major.COMPUTER) { continue; } 
             if (majorClass == BluetoothClass.Device.Major.IMAGING || name.contains("print") || name.contains("mtp") || name.contains("zj") || name.contains("58") || name.contains("80") || name.contains("pt-") || name.contains("blue")) { 
                 likelyPrinters.add(device); 
-            } else { 
-                otherDevices.add(device); 
-            } 
+            } else { otherDevices.add(device); } 
         }
         
-        final ArrayList<BluetoothDevice> devicesToTry = new ArrayList<>(); 
-        devicesToTry.addAll(likelyPrinters); 
-        devicesToTry.addAll(otherDevices);
-        
-        if (devicesToTry.isEmpty()) { 
-            notifyWebPrintFailed("Tidak ada perangkat tipe printer"); 
-            return; 
-        }
+        final ArrayList<BluetoothDevice> devicesToTry = new ArrayList<>(); devicesToTry.addAll(likelyPrinters); devicesToTry.addAll(otherDevices);
+        if (devicesToTry.isEmpty()) { notifyWebPrintFailed("Tidak ada perangkat tipe printer"); return; }
 
         new Thread(new Runnable() {
-            @Override 
-            public void run() {
-                boolean isPrinted = false; 
-                String printerName = ""; 
-                UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"); 
-                byte[] imageBytes = null;
+            @Override public void run() {
+                boolean isPrinted = false; String printerName = ""; 
+                UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"); byte[] imageBytes = null;
                 
                 if (logoBase64 != null && logoBase64.startsWith("data:image")) { 
                     try { 
@@ -1054,8 +913,7 @@ public class MainActivity extends Activity {
                         byte[] decodedString = Base64.decode(pureBase64, Base64.DEFAULT); 
                         Bitmap bitmap = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length); 
                         if(bitmap != null){ 
-                            int targetWidth = 360; 
-                            targetWidth = (targetWidth / 8) * 8; 
+                            int targetWidth = 360; targetWidth = (targetWidth / 8) * 8; 
                             int targetHeight = (int) (bitmap.getHeight() * ((float) targetWidth / bitmap.getWidth())); 
                             Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true); 
                             imageBytes = decodeBitmapToEscPos(scaledBitmap); 
@@ -1065,57 +923,36 @@ public class MainActivity extends Activity {
                 
                 for (BluetoothDevice device : devicesToTry) {
                     try { 
-                        BluetoothSocket socket = device.createRfcommSocketToServiceRecord(uuid); 
-                        socket.connect(); 
-                        OutputStream outputStream = socket.getOutputStream(); 
-                        outputStream.write(new byte[]{27, 64}); 
+                        BluetoothSocket socket = device.createRfcommSocketToServiceRecord(uuid); socket.connect(); 
+                        OutputStream outputStream = socket.getOutputStream(); outputStream.write(new byte[]{27, 64}); 
                         
                         if (imageBytes != null) { 
-                            outputStream.write(new byte[]{27, 97, 1}); 
-                            outputStream.flush(); 
+                            outputStream.write(new byte[]{27, 97, 1}); outputStream.flush(); 
                             int chunkSize = 256; 
                             for (int i = 0; i < imageBytes.length; i += chunkSize) { 
                                 int length = Math.min(chunkSize, imageBytes.length - i); 
-                                outputStream.write(imageBytes, i, length); 
-                                outputStream.flush(); 
-                                Thread.sleep(15); 
+                                outputStream.write(imageBytes, i, length); outputStream.flush(); Thread.sleep(15); 
                             } 
-                            outputStream.write("\n\n".getBytes()); 
-                            outputStream.flush(); 
-                            Thread.sleep(400); 
+                            outputStream.write("\n\n".getBytes()); outputStream.flush(); Thread.sleep(400); 
                         }
                         
-                        outputStream.write(textToPrint.getBytes("UTF-8")); 
-                        outputStream.write("\n\n\n".getBytes()); 
-                        outputStream.flush(); 
-                        socket.close(); 
-                        isPrinted = true; 
-                        printerName = device.getName(); 
-                        break; 
-                    } catch (Exception e) { 
-                        continue; 
-                    }
+                        outputStream.write(textToPrint.getBytes("UTF-8")); outputStream.write("\n\n\n".getBytes()); outputStream.flush(); socket.close(); 
+                        isPrinted = true; printerName = device.getName(); break; 
+                    } catch (Exception e) { continue; }
                 }
                 
                 if (isPrinted) { 
                     final String pN = printerName; 
-                    runOnUiThread(new Runnable() { 
-                        @Override 
-                        public void run() { 
-                            webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(true, 'Berhasil mencetak di printer: " + pN + "');}", null); 
-                        } 
-                    }); 
-                } else { 
-                    notifyWebPrintFailed("Gagal terhubung ke seluruh printer paired."); 
-                }
+                    runOnUiThread(new Runnable() { @Override public void run() { 
+                        webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(true, 'Berhasil mencetak di printer: " + pN + "');}", null); 
+                    }}); 
+                } else { notifyWebPrintFailed("Gagal terhubung ke seluruh printer paired."); }
             }
         }).start();
     }
 
     private byte[] decodeBitmapToEscPos(Bitmap bmp) {
-        int width = bmp.getWidth(); 
-        int height = bmp.getHeight(); 
-        int xBytes = (width + 7) / 8; 
+        int width = bmp.getWidth(); int height = bmp.getHeight(); int xBytes = (width + 7) / 8; 
         byte[] data = new byte[8 + (xBytes * height)];
         data[0] = 0x1D; data[1] = 0x76; data[2] = 0x30; data[3] = 0x00; 
         data[4] = (byte) (xBytes % 256); data[5] = (byte) (xBytes / 256); 
@@ -1130,9 +967,7 @@ public class MainActivity extends Activity {
                         int pixel = bmp.getPixel(x + k, y); 
                         if (Color.alpha(pixel) < 128) continue; 
                         int luminance = (int) (Color.red(pixel) * 0.299 + Color.green(pixel) * 0.587 + Color.blue(pixel) * 0.114); 
-                        if (luminance < 235) { 
-                            b |= (1 << (7 - k)); 
-                        } 
+                        if (luminance < 235) { b |= (1 << (7 - k)); } 
                     } 
                 } 
                 data[idx++] = b; 
@@ -1145,17 +980,13 @@ public class MainActivity extends Activity {
         try { 
             byte[] decodedString = Base64.decode(base64Data, Base64.DEFAULT); 
             Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length); 
-            File cachePath = new File(getCacheDir(), "images"); 
-            cachePath.mkdirs(); 
+            File cachePath = new File(getCacheDir(), "images"); cachePath.mkdirs(); 
             File file = new File(cachePath, "struk_curva_payment.png"); 
-            FileOutputStream stream = new FileOutputStream(file); 
-            decodedByte.compress(Bitmap.CompressFormat.PNG, 100, stream); 
-            stream.close(); 
+            FileOutputStream stream = new FileOutputStream(file); decodedByte.compress(Bitmap.CompressFormat.PNG, 100, stream); stream.close(); 
             Uri contentUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", file);
             
             if (contentUri != null) { 
-                Intent shareIntent = new Intent(); 
-                shareIntent.setAction(Intent.ACTION_SEND); 
+                Intent shareIntent = new Intent(); shareIntent.setAction(Intent.ACTION_SEND); 
                 shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION); 
                 shareIntent.setDataAndType(contentUri, getContentResolver().getType(contentUri)); 
                 shareIntent.putExtra(Intent.EXTRA_STREAM, contentUri); 
@@ -1170,27 +1001,20 @@ public class MainActivity extends Activity {
         try { 
             byte[] decodedString = Base64.decode(base64Data, Base64.DEFAULT); 
             Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length); 
-            File cachePath = new File(getCacheDir(), "images"); 
-            cachePath.mkdirs(); 
+            File cachePath = new File(getCacheDir(), "images"); cachePath.mkdirs(); 
             File file = new File(cachePath, "struk_pembayaran.png"); 
-            FileOutputStream stream = new FileOutputStream(file); 
-            decodedByte.compress(Bitmap.CompressFormat.PNG, 100, stream); 
-            stream.close(); 
+            FileOutputStream stream = new FileOutputStream(file); decodedByte.compress(Bitmap.CompressFormat.PNG, 100, stream); stream.close(); 
             Uri contentUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", file);
             
             if (contentUri != null) { 
-                Intent shareIntent = new Intent(); 
-                shareIntent.setAction(Intent.ACTION_SEND); 
+                Intent shareIntent = new Intent(); shareIntent.setAction(Intent.ACTION_SEND); 
                 shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION); 
                 shareIntent.setDataAndType(contentUri, getContentResolver().getType(contentUri)); 
                 shareIntent.putExtra(Intent.EXTRA_STREAM, contentUri); 
                 shareIntent.putExtra(Intent.EXTRA_TEXT, customCaption); 
                 startActivity(Intent.createChooser(shareIntent, "Bagikan Struk Melalui...")); 
             }
-        } catch (IOException e) { 
-            e.printStackTrace(); 
-            showToast("Gagal memproses gambar struk"); 
-        }
+        } catch (IOException e) { e.printStackTrace(); showToast("Gagal memproses gambar struk"); }
     }
 
     @android.webkit.JavascriptInterface
@@ -1201,72 +1025,54 @@ public class MainActivity extends Activity {
             android.content.ContentValues values = new android.content.ContentValues(); 
             values.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, fileName); 
             values.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png"); 
-            if (android.os.Build.VERSION.SDK_INT >= 29) { 
-                values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 1); 
-            } 
+            if (android.os.Build.VERSION.SDK_INT >= 29) { values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 1); } 
             
             android.content.ContentResolver resolver = MainActivity.this.getContentResolver(); 
             android.net.Uri uri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
             
             if (uri != null) { 
                 java.io.OutputStream out = resolver.openOutputStream(uri); 
-                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out); 
-                out.flush(); 
-                out.close(); 
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out); out.flush(); out.close(); 
                 if (android.os.Build.VERSION.SDK_INT >= 29) { 
-                    values.clear(); 
-                    values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0); 
+                    values.clear(); values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0); 
                     resolver.update(uri, values, null, null); 
                 } 
-                MainActivity.this.runOnUiThread(new Runnable() { 
-                    public void run() { 
-                        android.widget.Toast.makeText(MainActivity.this, "Gambar berhasil disimpan ke Galeri", android.widget.Toast.LENGTH_SHORT).show(); 
-                    } 
-                }); 
-            } else { 
-                throw new Exception("URI is null"); 
-            }
+                MainActivity.this.runOnUiThread(new Runnable() { public void run() { 
+                    android.widget.Toast.makeText(MainActivity.this, "Gambar berhasil disimpan ke Galeri", android.widget.Toast.LENGTH_SHORT).show(); 
+                }}); 
+            } else { throw new Exception("URI is null"); }
         } catch (Exception e) { 
             e.printStackTrace(); 
-            MainActivity.this.runOnUiThread(new Runnable() { 
-                public void run() { 
-                    android.widget.Toast.makeText(MainActivity.this, "Gagal menyimpan gambar", android.widget.Toast.LENGTH_SHORT).show(); 
-                } 
-            }); 
+            MainActivity.this.runOnUiThread(new Runnable() { public void run() { 
+                android.widget.Toast.makeText(MainActivity.this, "Gagal menyimpan gambar", android.widget.Toast.LENGTH_SHORT).show(); 
+            }}); 
         }
     }
 
     private void scanBarcode() {
         try { 
             Intent intent = new Intent(this, CaptureActivity.class); 
-            intent.putExtra("SCAN_MODE", "QR_CODE_MODE,PRODUCT_MODE"); 
-            intent.putExtra("ORIENTATION_LOCK", true); 
+            intent.putExtra("SCAN_MODE", "QR_CODE_MODE,PRODUCT_MODE"); intent.putExtra("ORIENTATION_LOCK", true); 
             startActivityForResult(intent, BARCODE_SCAN_REQUEST); 
         } catch (Exception e) { 
             try { 
                 Intent intent = new Intent("com.google.zxing.client.android.SCAN"); 
-                intent.putExtra("SCAN_MODE", "QR_CODE_MODE,PRODUCT_MODE"); 
-                startActivityForResult(intent, BARCODE_SCAN_REQUEST); 
+                intent.putExtra("SCAN_MODE", "QR_CODE_MODE,PRODUCT_MODE"); startActivityForResult(intent, BARCODE_SCAN_REQUEST); 
             } catch (Exception ex) {} 
         }
     }
 
     private void openContactPicker() {
         if (checkSelfPermission(android.Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) { 
-            requestPermissions(new String[]{android.Manifest.permission.READ_CONTACTS}, REQUEST_CONTACT_PERMISSION); 
-            return; 
+            requestPermissions(new String[]{android.Manifest.permission.READ_CONTACTS}, REQUEST_CONTACT_PERMISSION); return; 
         }
-        Intent intent = new Intent(Intent.ACTION_PICK); 
-        intent.setType(ContactsContract.CommonDataKinds.Phone.CONTENT_TYPE); 
+        Intent intent = new Intent(Intent.ACTION_PICK); intent.setType(ContactsContract.CommonDataKinds.Phone.CONTENT_TYPE); 
         startActivityForResult(intent, PICK_CONTACT_REQUEST);
     }
 
     private String getContactsFromDevice() {
-        if (checkSelfPermission(android.Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) { 
-            return "[]"; 
-        }
-        JSONArray contactsArray = new JSONArray(); 
-        ContentResolver cr = getContentResolver();
+        if (checkSelfPermission(android.Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) { return "[]"; }
+        JSONArray contactsArray = new JSONArray(); ContentResolver cr = getContentResolver();
         
         try {
             Cursor cursor = cr.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, null, null, null, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC");
@@ -1274,40 +1080,30 @@ public class MainActivity extends Activity {
                 int nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME); 
                 int phoneIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER);
                 while (cursor.moveToNext()) { 
-                    String name = cursor.getString(nameIndex); 
-                    String phone = cursor.getString(phoneIndex); 
+                    String name = cursor.getString(nameIndex); String phone = cursor.getString(phoneIndex); 
                     if (phone != null) { 
                         phone = phone.replaceAll("[^0-9]", ""); 
                         if (phone.startsWith("62")) { phone = "0" + phone.substring(2); } 
                         if (phone.length() > 13) { phone = phone.substring(phone.length() - 13); } 
                     }
                     if (name != null && phone != null && phone.length() >= 10) { 
-                        JSONObject contact = new JSONObject(); 
-                        contact.put("name", name); 
-                        contact.put("tel", phone); 
-                        contactsArray.put(contact); 
+                        JSONObject contact = new JSONObject(); contact.put("name", name); contact.put("tel", phone); contactsArray.put(contact); 
                     }
                 } 
                 cursor.close();
             }
         } catch (Exception e) {} 
-        
         return contactsArray.toString();
     }
 
-    private void requestContactPermission() { 
-        requestPermissions(new String[]{android.Manifest.permission.READ_CONTACTS}, REQUEST_CONTACT_PERMISSION); 
-    }
+    private void requestContactPermission() { requestPermissions(new String[]{android.Manifest.permission.READ_CONTACTS}, REQUEST_CONTACT_PERMISSION); }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_CONTACT_PERMISSION) { 
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) { 
-                openContactPicker(); 
-            } else { 
-                webView.evaluateJavascript("javascript:onAndroidContactsError('Izin ditolak')", null); 
-            } 
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) { openContactPicker(); } 
+            else { webView.evaluateJavascript("javascript:onAndroidContactsError('Izin ditolak')", null); } 
         } 
     }
 
@@ -1316,7 +1112,6 @@ public class MainActivity extends Activity {
             Window window = getWindow();
             window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS | WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
             window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-            
             window.setStatusBarColor(Color.parseColor("#1791f4"));
             window.setNavigationBarColor(Color.WHITE);
             
@@ -1331,80 +1126,49 @@ public class MainActivity extends Activity {
     private boolean isNetworkAvailable() {
         ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
         if (connectivityManager != null) { 
-            NetworkInfo activeNetworkInfo = connectivityManager.getActiveNetworkInfo(); 
-            return activeNetworkInfo != null && activeNetworkInfo.isConnected(); 
+            NetworkInfo activeNetworkInfo = connectivityManager.getActiveNetworkInfo(); return activeNetworkInfo != null && activeNetworkInfo.isConnected(); 
         } 
         return false;
     }
 
     private void setupCookies() { 
-        CookieManager cookieManager = CookieManager.getInstance(); 
-        cookieManager.setAcceptCookie(true); 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) { 
-            cookieManager.setAcceptThirdPartyCookies(webView, true); 
-        } 
+        CookieManager cookieManager = CookieManager.getInstance(); cookieManager.setAcceptCookie(true); 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) { cookieManager.setAcceptThirdPartyCookies(webView, true); } 
     }
     
-    private void saveCookies() { 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) { 
-            CookieManager.getInstance().flush(); 
-        } 
-    }
+    private void saveCookies() { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) { CookieManager.getInstance().flush(); } }
 
     private void loadFcmToken() {
         try { 
             com.google.firebase.messaging.FirebaseMessaging.getInstance().getToken().addOnCompleteListener(new com.google.android.gms.tasks.OnCompleteListener<String>() { 
-                @Override 
-                public void onComplete(com.google.android.gms.tasks.Task<String> task) { 
+                @Override public void onComplete(com.google.android.gms.tasks.Task<String> task) { 
                     if (!task.isSuccessful()) { fcmToken = ""; return; } 
-                    fcmToken = task.getResult(); 
-                    sendFcmTokenToWeb(); 
+                    fcmToken = task.getResult(); sendFcmTokenToWeb(); 
                 } 
             }); 
-        } catch (Exception e) { 
-            fcmToken = ""; 
-        }
+        } catch (Exception e) { fcmToken = ""; }
     }
 
     public void sendFcmTokenToWeb() {
         if (fcmToken == null || fcmToken.equals("")) { loadFcmToken(); } 
         if (fcmToken == null || fcmToken.equals("")) { return; }
-        
         try { 
-            String token = java.net.URLEncoder.encode(fcmToken, "UTF-8"); 
-            String device = java.net.URLEncoder.encode("Android WebView", "UTF-8"); 
+            String token = java.net.URLEncoder.encode(fcmToken, "UTF-8"); String device = java.net.URLEncoder.encode("Android WebView", "UTF-8"); 
             final String js = "javascript:(function(){ try{var xhr=new XMLHttpRequest(); xhr.open('POST','" + getRootApiUrl() + "api/save_fcm_token.php',true); xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded'); xhr.send('token=" + token + "&device_name=" + device + "');}catch(e){} })()";
-            
-            webView.post(new Runnable() { 
-                @Override 
-                public void run() { 
-                    webView.evaluateJavascript(js, null); 
-                } 
-            });
-        } catch (Exception e) { 
-            e.printStackTrace(); 
-        }
+            webView.post(new Runnable() { @Override public void run() { webView.evaluateJavascript(js, null); } });
+        } catch (Exception e) { e.printStackTrace(); }
     }
 
     public void showToast(final String message) { 
-        runOnUiThread(new Runnable() { 
-            @Override 
-            public void run() { 
-                Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show(); 
-            } 
-        }); 
+        runOnUiThread(new Runnable() { @Override public void run() { Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show(); } }); 
     }
 
     private void openAppNative(String url) {
-        try { 
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); 
-        } catch (Exception e) { 
+        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); } 
+        catch (Exception e) { 
             try { 
-                if (url.startsWith("whatsapp://")) { 
-                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url.replace("whatsapp://send?phone=", "https://wa.me/")))); 
-                } else if (url.startsWith("tg://")) { 
-                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url.replace("tg://resolve?domain=", "https://t.me/")))); 
-                } 
+                if (url.startsWith("whatsapp://")) { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url.replace("whatsapp://send?phone=", "https://wa.me/")))); } 
+                else if (url.startsWith("tg://")) { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url.replace("tg://resolve?domain=", "https://t.me/")))); } 
             } catch (Exception ex) {} 
         }
     }
@@ -1418,55 +1182,32 @@ public class MainActivity extends Activity {
             Uri[] results = null;
             if (resultCode == Activity.RESULT_OK && data != null) {
                 String dataString = data.getDataString();
-                if (dataString != null) {
-                    results = new Uri[]{Uri.parse(dataString)};
-                } else if (data.getClipData() != null) {
-                    int count = data.getClipData().getItemCount();
-                    results = new Uri[count];
-                    for (int i = 0; i < count; i++) {
-                        results[i] = data.getClipData().getItemAt(i).getUri();
-                    }
+                if (dataString != null) { results = new Uri[]{Uri.parse(dataString)}; } 
+                else if (data.getClipData() != null) {
+                    int count = data.getClipData().getItemCount(); results = new Uri[count];
+                    for (int i = 0; i < count; i++) { results[i] = data.getClipData().getItemAt(i).getUri(); }
                 }
             }
-            filePathCallback.onReceiveValue(results);
-            filePathCallback = null;
-            return;
+            filePathCallback.onReceiveValue(results); filePathCallback = null; return;
         }
 
         if (requestCode == REQUEST_APP_LOCK) {
-            if (resultCode == RESULT_OK) {
-                unlockAppAndHideSplash();
-            } else {
-                showToast("Autentikasi batal/gagal.");
-                finish(); 
-            }
-            return;
+            if (resultCode == RESULT_OK) { unlockAppAndHideSplash(); } 
+            else { showToast("Autentikasi batal/gagal."); finish(); } return;
         }
 
         if (requestCode == PICK_CONTACT_REQUEST) {
             if (resultCode == RESULT_OK && data != null) {
-                Uri contactData = data.getData();
-                Cursor cursor = getContentResolver().query(contactData, null, null, null, null);
+                Uri contactData = data.getData(); Cursor cursor = getContentResolver().query(contactData, null, null, null, null);
                 if (cursor != null && cursor.moveToFirst()) {
-                    int nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME);
-                    int numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER);
-                    String name = cursor.getString(nameIndex);
-                    String number = cursor.getString(numberIndex);
-                    cursor.close();
+                    int nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME); int numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER);
+                    String name = cursor.getString(nameIndex); String number = cursor.getString(numberIndex); cursor.close();
 
-                    if (number != null) {
-                        number = number.replaceAll("[^0-9]", ""); 
-                        if (number.startsWith("62")) {
-                            number = "0" + number.substring(2); 
-                        }
-                    }
-
-                    final String finalName = name != null ? name : "";
-                    final String finalNumber = number != null ? number : "";
+                    if (number != null) { number = number.replaceAll("[^0-9]", ""); if (number.startsWith("62")) { number = "0" + number.substring(2); } }
+                    final String finalName = name != null ? name : ""; final String finalNumber = number != null ? number : "";
 
                     runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
+                        @Override public void run() {
                             String js = "javascript:(function(){" +
                                         "if(typeof onContactSelected === 'function') { onContactSelected('" + finalName + "', '" + finalNumber + "'); }" +
                                         "else if(typeof setContact === 'function') { setContact('" + finalName + "', '" + finalNumber + "'); }" +
@@ -1500,8 +1241,7 @@ public class MainActivity extends Activity {
                 final String finalScanResult = scanResult;
                 if (finalScanResult != null) {
                     runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
+                        @Override public void run() {
                             webView.evaluateJavascript("javascript:if(typeof onBarcodeScanned === 'function'){onBarcodeScanned('" + finalScanResult + "');}", null);
                         }
                     });

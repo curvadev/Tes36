@@ -32,10 +32,12 @@ import android.os.Handler;
 import android.provider.ContactsContract;
 import androidx.core.content.FileProvider;
 import android.util.Base64;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
+import android.webkit.ConsoleMessage;
 import android.webkit.CookieManager;
 import android.webkit.JsPromptResult;
 import android.webkit.ValueCallback;
@@ -95,6 +97,7 @@ public class MainActivity extends Activity {
 
     private boolean isAppUnlocked = false;
     private boolean doubleBackToExitPressedOnce = false;
+    private boolean hasCheckedUpdate = false; // Flag agar cek update hanya jalan sekali
 
     // =======================================================
     // TARGET GITHUB ACTIONS (JANGAN UBAH BARIS INI MANUAL)
@@ -163,14 +166,11 @@ public class MainActivity extends Activity {
             }
         } catch (Exception e) {}
 
-        // Mengatur status bar biru dan navigation bar putih
         setSystemBarColors();
 
-        // 1. ROOT UTAMA
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.parseColor("#1791f4"));
 
-        // 2. KOTAK PUTIH DI BAWAH
         View bottomWhiteBg = new View(this);
         bottomWhiteBg.setBackgroundColor(Color.WHITE);
         int navHeight = (int) (100 * getResources().getDisplayMetrics().density);
@@ -179,13 +179,12 @@ public class MainActivity extends Activity {
         bottomParams.gravity = Gravity.BOTTOM;
         root.addView(bottomWhiteBg, bottomParams);
 
-        // 3. PEMBUNGKUS WEBVIEW
         FrameLayout contentWrapper = new FrameLayout(this);
         contentWrapper.setFitsSystemWindows(true);
 
         webView = new WebView(this);
         
-        // FIX 1: MATIKAN AUTOFILL / SARAN EMAIL & SANDI DI ANDROID 8.0+
+        // FIX: Matikan Autofill / saran sandi
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             webView.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
         }
@@ -198,7 +197,6 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT, 
                 FrameLayout.LayoutParams.MATCH_PARENT));
 
-        // 4. SPLASH SCREEN
         splash = new RelativeLayout(this);
         splash.setBackgroundColor(Color.parseColor("#1791f4")); 
         splash.setClickable(true); 
@@ -270,10 +268,6 @@ public class MainActivity extends Activity {
             splash.setVisibility(View.GONE);
             isAppUnlocked = true;
             checkNotificationPermission();
-            
-            if (!getPackageName().toLowerCase().contains("admin")) {
-                checkForAppUpdate();
-            }
         }
 
         setupWebView();
@@ -306,6 +300,18 @@ public class MainActivity extends Activity {
                 saveCookies(); 
                 injectAndroidBridge(); 
                 sendFcmTokenToWeb();
+
+                // PENGECEKAN UPDATE DIPINDAH KE SINI AGAR JS DASHBOARD SUDAH SIAP
+                if (!hasCheckedUpdate && !getPackageName().toLowerCase().contains("admin")) {
+                    hasCheckedUpdate = true; 
+                    // Beri jeda 1 detik agar JS Dashboard selesai dimuat sempurna
+                    new Handler().postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            checkForAppUpdate();
+                        }
+                    }, 1000);
+                }
             }
 
             @SuppressWarnings("deprecation")
@@ -341,7 +347,7 @@ public class MainActivity extends Activity {
             }, SPLASH_TIME);
         }
 
-        // FIX 2: MENDUKUNG GESTURE BACK ANDROID 13+ (API 33 KE ATAS)
+        // Gesture Back Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
                 OnBackInvokedDispatcher.PRIORITY_DEFAULT,
@@ -447,10 +453,6 @@ public class MainActivity extends Activity {
             public void run() { 
                 splash.setVisibility(View.GONE); 
                 checkNotificationPermission(); 
-                
-                if (!getPackageName().toLowerCase().contains("admin")) {
-                    checkForAppUpdate(); 
-                }
             }
         }, 500);
     }
@@ -472,16 +474,21 @@ public class MainActivity extends Activity {
 
     private boolean isVersionOlder(String currentVersion, String serverVersion) {
         if (currentVersion == null || serverVersion == null) return false;
-        String[] currentParts = currentVersion.split("\\."); 
-        String[] serverParts = serverVersion.split("\\.");
-        int length = Math.max(currentParts.length, serverParts.length);
-        
-        for (int i = 0; i < length; i++) {
-            int currentPart = i < currentParts.length ? Integer.parseInt(currentParts[i]) : 0; 
-            int serverPart = i < serverParts.length ? Integer.parseInt(serverParts[i]) : 0;
-            if (currentPart < serverPart) { return true; } 
-            if (currentPart > serverPart) { return false; }
-        } 
+        try {
+            // Bersihkan string dari karakter aneh (misal "15.0.3-beta" jadi "15.0.3")
+            String[] currentParts = currentVersion.replaceAll("[^0-9.]", "").split("\\."); 
+            String[] serverParts = serverVersion.replaceAll("[^0-9.]", "").split("\\.");
+            int length = Math.max(currentParts.length, serverParts.length);
+            
+            for (int i = 0; i < length; i++) {
+                int currentPart = i < currentParts.length ? Integer.parseInt(currentParts[i]) : 0; 
+                int serverPart = i < serverParts.length ? Integer.parseInt(serverParts[i]) : 0;
+                if (currentPart < serverPart) { return true; } 
+                if (currentPart > serverPart) { return false; }
+            } 
+        } catch (Exception e) {
+            return false;
+        }
         return false;
     }
 
@@ -510,12 +517,17 @@ public class MainActivity extends Activity {
                         reader.close();
                         
                         JSONObject json = new JSONObject(response.toString());
-                        if (json.getBoolean("success")) {
-                            final String serverVersion = json.has("latest_version_name") ? json.getString("latest_version_name") : "1.0.0"; 
-                            final boolean forceUpdate = json.getBoolean("force_update"); 
-                            final String updateUrl = json.getString("update_url"); 
-                            final String releaseNotes = json.getString("release_notes"); 
+                        
+                        if (json.has("success") && json.getBoolean("success")) {
+                            // Ambil data dengan optString/optBoolean agar tidak crash jika key tidak ada
+                            final String serverVersion = json.optString("latest_version_name", "1.0.0"); 
+                            final boolean forceUpdate = json.optBoolean("force_update", false); 
+                            final String updateUrl = json.optString("update_url", ""); 
+                            final String releaseNotes = json.optString("release_notes", "Pembaruan tersedia."); 
+                            
                             final String currentVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+                            
+                            Log.d("CEK_UPDATE", "Versi HP: " + currentVersion + " | Versi Server: " + serverVersion);
                             
                             runOnUiThread(new Runnable() { 
                                 @Override 
@@ -527,23 +539,20 @@ public class MainActivity extends Activity {
                             });
                         }
                     }
-                } catch (Exception e) {}
+                } catch (Exception e) {
+                    Log.e("CEK_UPDATE", "Error: " + e.getMessage());
+                }
             }
         }).start();
     }
 
-    // =================================================================
-    // UPDATE: Memanggil modal dari Web (Dashboard) alih-alih dialog native
-    // =================================================================
     private void showUpdateDialog(final boolean isForced, final String url, String notes) {
         String escapedNotes = notes.replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
-        String js = "javascript:showUpdateModal('" + url + "', '" + escapedNotes + "', " + isForced + ")";
+        String js = "javascript:if(typeof showUpdateModal === 'function') { showUpdateModal('" + url + "', '" + escapedNotes + "', " + isForced + "); } else { alert('Modal update belum siap, silakan restart aplikasi.'); }";
         webView.evaluateJavascript(js, null);
     }
 
-    // =================================================================
-    // LOGIKA BARU: DOWNLOAD APK & INSTALL OTOMATIS (DOWNLOAD MANAGER)
-    // =================================================================
+    // LOGIKA DOWNLOAD APK
     private BroadcastReceiver updateDownloadReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -568,6 +577,13 @@ public class MainActivity extends Activity {
 
     private void downloadApkNative(String url) {
         try {
+            // Jika URL adalah Play Store, langsung buka Play Store
+            if (url.contains("play.google.com") || url.startsWith("market://")) {
+                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                startActivity(intent);
+                return;
+            }
+
             File apkFile = new File(getExternalFilesDir(null), "update.apk");
             if (apkFile.exists()) apkFile.delete();
 
@@ -809,7 +825,6 @@ public class MainActivity extends Activity {
         settings.setAllowContentAccess(true);
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         
-        // FIX 2: MATIKAN FITUR PENYIMPANAN FORM & PASSWORD BAWAAN WEBVIEW
         settings.setSaveFormData(false);
         settings.setSavePassword(false);
 
@@ -825,6 +840,12 @@ public class MainActivity extends Activity {
         }
 
         webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
+                Log.d("WebViewConsole", consoleMessage.message() + " -- From line " + consoleMessage.lineNumber() + " of " + consoleMessage.sourceId());
+                return true;
+            }
+
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
                 if (MainActivity.this.filePathCallback != null) {

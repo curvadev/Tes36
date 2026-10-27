@@ -8,10 +8,12 @@ import android.bluetooth.BluetoothClass;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
@@ -90,14 +92,6 @@ public class MainActivity extends Activity {
 
     private boolean isAppUnlocked = false;
     private boolean doubleBackToExitPressedOnce = false;
-    private boolean hasCheckedUpdate = false; 
-    
-    // Variabel penampung data update sementara (agar instan saat web siap)
-    private boolean isUpdateAvailable = false;
-    private String serverVersionName = "";
-    private String serverUpdateUrl = "";
-    private String serverReleaseNotes = "";
-    private boolean serverForceUpdate = false;
 
     private String APP_URL = "https://curva.web.id/ppob/"; 
     public int SPLASH_TIME = 3000;
@@ -247,9 +241,6 @@ public class MainActivity extends Activity {
         setupWebView();
         setupCookies();
         loadFcmToken();
-        
-        // CEK UPDATE DARI AWAL (SEBELUM WEB DIMUAT)
-        checkForAppUpdate();
 
         webView.setWebViewClient(new WebViewClient() {
             @SuppressWarnings("deprecation")
@@ -276,12 +267,6 @@ public class MainActivity extends Activity {
                 saveCookies(); 
                 injectAndroidBridge(); 
                 sendFcmTokenToWeb();
-                
-                // JIKA DATA UPDATE SUDAH SIAP, LANGSUNG TAMPILKAN MODAL WEB TANPA DELAY
-                if (isUpdateAvailable) {
-                    showUpdateDialog(serverForceUpdate, serverUpdateUrl, serverReleaseNotes);
-                    isUpdateAvailable = false; // Reset agar tidak looping
-                }
             }
 
             @SuppressWarnings("deprecation")
@@ -429,99 +414,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    private boolean isVersionOlder(String currentVersion, String serverVersion) {
-        if (currentVersion == null || serverVersion == null) return false;
-        try {
-            String[] currentParts = currentVersion.replaceAll("[^0-9.]", "").split("\\."); 
-            String[] serverParts = serverVersion.replaceAll("[^0-9.]", "").split("\\.");
-            int length = Math.max(currentParts.length, serverParts.length);
-            for (int i = 0; i < length; i++) {
-                int currentPart = i < currentParts.length ? Integer.parseInt(currentParts[i]) : 0; 
-                int serverPart = i < serverParts.length ? Integer.parseInt(serverParts[i]) : 0;
-                if (currentPart < serverPart) { return true; } 
-                if (currentPart > serverPart) { return false; }
-            } 
-        } catch (Exception e) { return false; }
-        return false;
-    }
-
-    private void checkForAppUpdate() {
-        new Thread(new Runnable() {
-            @Override 
-            public void run() {
-                try {
-                    String bypassCacheUrl = getRootApiUrl() + "api/check_version.php?timestamp=" + System.currentTimeMillis(); 
-                    URL url = new URL(bypassCacheUrl); 
-                    HttpURLConnection conn = (HttpURLConnection) url.openConnection(); 
-                    conn.setRequestMethod("GET"); 
-                    conn.setUseCaches(false); 
-                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"); 
-                    conn.setRequestProperty("Accept", "application/json"); 
-                    conn.setRequestProperty("Cache-Control", "no-cache");
-                    conn.setRequestProperty("Pragma", "no-cache");
-                    conn.setConnectTimeout(8000); 
-                    conn.setReadTimeout(8000);
-                    
-                    if (conn.getResponseCode() == 200) {
-                        BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream())); 
-                        StringBuilder response = new StringBuilder(); 
-                        String line;
-                        while ((line = reader.readLine()) != null) { response.append(line); } 
-                        reader.close();
-                        
-                        JSONObject json = new JSONObject(response.toString());
-                        boolean isSuccess = (json.has("success") && json.optBoolean("success")) || (json.has("status") && json.optString("status").equalsIgnoreCase("success"));
-                            
-                        if (isSuccess) {
-                            JSONObject data = json;
-                            if (json.has("data") && json.get("data") instanceof JSONObject) {
-                                data = json.getJSONObject("data");
-                            }
-                            
-                            final String serverVersion = data.optString("latest_version_name", data.optString("version_name", data.optString("version", "1.0.0"))); 
-                            final String currentVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-                            
-                            if (isVersionOlder(currentVersion, serverVersion) && !isFinishing()) {
-                                // Simpan data ke variabel sementara
-                                isUpdateAvailable = true;
-                                serverVersionName = serverVersion;
-                                serverForceUpdate = data.optBoolean("force_update", data.optBoolean("force", false)); 
-                                serverUpdateUrl = data.optString("update_url", data.optString("url", "")); 
-                                serverReleaseNotes = data.optString("release_notes", data.optString("notes", "Pembaruan tersedia.")); 
-                                
-                                // Jika web sudah selesai dimuat (misal cek update terlambat), langsung tampilkan
-                                runOnUiThread(new Runnable() { 
-                                    @Override 
-                                    public void run() { 
-                                        if (webView != null && webView.getUrl() != null && webView.getUrl().contains("dashboard.php")) {
-                                            showUpdateDialog(serverForceUpdate, serverUpdateUrl, serverReleaseNotes);
-                                            isUpdateAvailable = false;
-                                        }
-                                    } 
-                                });
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    Log.e("CEK_UPDATE", "Error: " + e.getMessage());
-                }
-            }
-        }).start();
-    }
-
-    // Memanggil Modal Web (Tanpa Native Fallback)
-    private void showUpdateDialog(final boolean isForced, final String url, String notes) {
-        String escapedNotes = notes.replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
-        
-        // Gunakan window.showUpdateModal yang ada di Dashboard.php
-        String js = "javascript:(function(){" +
-                "if (typeof window.showUpdateModal === 'function') {" +
-                "  window.showUpdateModal('" + url + "', '" + escapedNotes + "', " + isForced + ");" +
-                "}" +
-                "})()";
-        webView.evaluateJavascript(js, null);
-    }
-
     // =================================================================
     // DOWNLOAD MANUAL & INSTALL VIA FILEPROVIDER
     // =================================================================
@@ -634,6 +526,7 @@ public class MainActivity extends Activity {
 
     private void injectAndroidBridge() {
         String js = "javascript:(function(){ if (typeof window.Android === 'undefined') { window.Android = {" +
+                "getAppVersion: function() { return prompt('AndroidBridge:getAppVersion', ''); }," +
                 "getContacts: function() { return prompt('AndroidBridge:getContacts', ''); }," +
                 "requestContactPermission: function() { prompt('AndroidBridge:requestContactPermission', ''); }," +
                 "showToast: function(message) { prompt('AndroidBridge:showToast', message); }," +
@@ -657,7 +550,13 @@ public class MainActivity extends Activity {
         if (message != null && message.startsWith("AndroidBridge:")) {
             String action = message.replace("AndroidBridge:", "");
             
-            if (action.equals("getContacts")) { result.confirm(getContactsFromDevice()); return true; }
+            if (action.equals("getAppVersion")) {
+                String vName = "1.0.0";
+                try { vName = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception e) {}
+                result.confirm(vName);
+                return true;
+            }
+            else if (action.equals("getContacts")) { result.confirm(getContactsFromDevice()); return true; }
             else if (action.equals("requestContactPermission")) { requestContactPermission(); result.confirm(""); return true; }
             else if (action.equals("showToast")) { showToast(defaultValue); result.confirm(""); return true; }
             else if (action.equals("openContactPicker")) { openContactPicker(); result.confirm(""); return true; }

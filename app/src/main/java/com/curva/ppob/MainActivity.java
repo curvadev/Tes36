@@ -50,6 +50,10 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+// IMPORT BARU UNTUK ANDROID 13+ GESTURE BACK
+import android.window.OnBackInvokedDispatcher;
+import android.window.OnBackInvokedCallback;
+
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.journeyapps.barcodescanner.CaptureActivity;
 import org.json.JSONArray;
@@ -323,6 +327,21 @@ public class MainActivity extends Activity {
                 }
             }, SPLASH_TIME);
         }
+
+        // =================================================================
+        // TAMBAHAN: MENDUKUNG GESTURE BACK ANDROID 13+ (API 33 KE ATAS)
+        // =================================================================
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                new OnBackInvokedCallback() {
+                    @Override
+                    public void onBackInvoked() {
+                        handleCustomBack();
+                    }
+                }
+            );
+        }
     }
 
     private void checkRemoteCacheWipe() {
@@ -358,29 +377,21 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    @Override
-    public boolean onKeyDown(int keyCode, android.view.KeyEvent event) {
-        if (event.getAction() == android.view.KeyEvent.ACTION_DOWN && keyCode == android.view.KeyEvent.KEYCODE_BACK) {
-            handleCustomBack(); 
-            return true;
-        }
-        return super.onKeyDown(keyCode, event);
-    }
-
-    @Override
-    public void onBackPressed() {
-        handleCustomBack();
-    }
+    // CATATAN: Method onKeyDown dan onBackPressed LAMA sudah dihapus / dikomentari
+    // karena sekarang kita menggunakan OnBackInvokedDispatcher di atas.
 
     private void handleCustomBack() {
         if (webView != null) {
+            // Cek jika ada modal/overlay dengan class 'show' (seperti bottom sheet di web)
             webView.evaluateJavascript("javascript:(function() { var overlays = document.querySelectorAll('.show'); if (overlays.length > 0) { overlays.forEach(function(el) { el.classList.remove('show'); }); return 'true'; } return 'false'; })()", new ValueCallback<String>() {
                 @Override
                 public void onReceiveValue(String value) {
                     if (!"\"true\"".equals(value) && !"true".equals(value)) {
+                        // Jika tidak ada modal, coba kembali ke halaman web sebelumnya
                         if (webView.canGoBack()) { 
                             webView.goBack(); 
                         } else { 
+                            // Jika tidak ada riwayat web, jalankan tekan 2x untuk keluar
                             performDoubleBackToExit(); 
                         }
                     }

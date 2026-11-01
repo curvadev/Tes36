@@ -28,10 +28,14 @@ import android.os.Handler;
 import android.provider.ContactsContract;
 import androidx.core.content.FileProvider;
 import android.util.Base64;
+import android.util.SparseArray;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewStructure;
 import android.view.Window;
 import android.view.WindowManager;
+import android.view.autofill.AutofillValue;
 import android.webkit.CookieManager;
 import android.webkit.JsPromptResult;
 import android.webkit.ValueCallback;
@@ -98,6 +102,36 @@ public class MainActivity extends Activity {
     private String APP_URL = "https://curva.web.id/ppob/"; 
     public int SPLASH_TIME = 3000;
     // =======================================================
+
+    // =========================================
+    // WEBVIEW KHUSUS: MENOLAK GOOGLE AUTOFILL
+    // =========================================
+    // WebView biasa kadang tetap mengirim struktur form ke layanan
+    // Autofill (Google Password Manager) walau flag sudah dimatikan.
+    // Kelas ini memutus jalurnya langsung di level View.
+
+    @TargetApi(Build.VERSION_CODES.O)
+    private static class NoAutofillWebView extends WebView {
+
+        public NoAutofillWebView(Context context) {
+            super(context);
+        }
+
+        @Override
+        public int getImportantForAutofill() {
+            return View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS;
+        }
+
+        @Override
+        public void onProvideAutofillVirtualStructure(ViewStructure structure, int flags) {
+            // sengaja kosong: struktur form tidak dikirim ke Google
+        }
+
+        @Override
+        public void autofill(SparseArray<AutofillValue> values) {
+            // sengaja kosong: tidak menerima pengisian otomatis
+        }
+    }
 
     private String getHomeUrl() {
         String url = APP_URL;
@@ -176,14 +210,26 @@ public class MainActivity extends Activity {
         FrameLayout contentWrapper = new FrameLayout(this);
         contentWrapper.setFitsSystemWindows(true);
 
-        webView = new WebView(this);
-        
         // =================================================================
-        // FIX 1: MATIKAN AUTOFILL / SARAN EMAIL & SANDI DI ANDROID 8.0+
+        // WEBVIEW ANTI AUTOFILL (menolak saran Google di level View)
         // =================================================================
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            webView.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
-        }
+        webView = new NoAutofillWebView(this);
+
+        webView.setFocusable(true);
+        webView.setFocusableInTouchMode(true);
+
+        webView.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_DOWN ||
+                    event.getAction() == MotionEvent.ACTION_UP) {
+                    if (!v.hasFocus()) {
+                        v.requestFocus();
+                    }
+                }
+                return false;
+            }
+        });
 
         contentWrapper.addView(webView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, 
@@ -261,6 +307,11 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(root);
 
+        // =================================================================
+        // MATIKAN AUTOFILL ANDROID (seluruh Activity + WebView)
+        // =================================================================
+        disableAutofill(root, contentWrapper);
+
         if (SPLASH_TIME <= 0) {
             splash.setVisibility(View.GONE);
             isAppUnlocked = true;
@@ -298,9 +349,34 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+
                 saveCookies(); 
                 injectAndroidBridge(); 
                 sendFcmTokenToWeb();
+
+                // Terapkan kembali pemblokiran Autofill
+                disableAutofill(null, null);
+
+                // =================================
+                // MATIKAN AUTOCOMPLETE FORM HTML
+                // =================================
+                String javascript =
+                    "(function() {" +
+                    "var forms = document.querySelectorAll('form');" +
+                    "forms.forEach(function(form) {" +
+                    "form.setAttribute('autocomplete','off');" +
+                    "});" +
+                    "var inputs = document.querySelectorAll('input');" +
+                    "inputs.forEach(function(input) {" +
+                    "input.setAttribute('autocomplete','off');" +
+                    "input.setAttribute('autocorrect','off');" +
+                    "input.setAttribute('autocapitalize','off');" +
+                    "input.setAttribute('spellcheck','false');" +
+                    "});" +
+                    "})();";
+
+                view.evaluateJavascript(javascript, null);
             }
 
             @SuppressWarnings("deprecation")
@@ -337,7 +413,7 @@ public class MainActivity extends Activity {
         }
 
         // =================================================================
-        // FIX 2: MENDUKUNG GESTURE BACK ANDROID 13+ (API 33 KE ATAS)
+        // MENDUKUNG GESTURE BACK ANDROID 13+ (API 33 KE ATAS)
         // =================================================================
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
@@ -349,6 +425,39 @@ public class MainActivity extends Activity {
                     }
                 }
             );
+        }
+    }
+
+    // =========================================
+    // DISABLE AUTOFILL
+    // =========================================
+
+    private void disableAutofill(View root, View contentWrapper) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
+            // Matikan Autofill seluruh Activity
+            getWindow().getDecorView().setImportantForAutofill(
+                View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+            );
+
+            // Matikan Autofill WebView
+            if (webView != null) {
+                webView.setImportantForAutofill(
+                    View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+                );
+            }
+
+            if (root != null) {
+                root.setImportantForAutofill(
+                    View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+                );
+            }
+
+            if (contentWrapper != null) {
+                contentWrapper.setImportantForAutofill(
+                    View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+                );
+            }
         }
     }
 
@@ -808,10 +917,11 @@ public class MainActivity extends Activity {
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         
         // =================================================================
-        // FIX 2: MATIKAN FITUR PENYIMPANAN FORM & PASSWORD BAWAAN WEBVIEW
+        // MATIKAN FITUR PENYIMPANAN FORM & PASSWORD BAWAAN WEBVIEW
         // =================================================================
         settings.setSaveFormData(false);
         settings.setSavePassword(false);
+        webView.clearFormData();
 
         settings.setAppCacheEnabled(true);
         settings.setAppCachePath(getApplicationContext().getCacheDir().getAbsolutePath());

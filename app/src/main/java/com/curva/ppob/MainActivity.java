@@ -3,12 +3,14 @@ package com.curva.ppob;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.DownloadManager;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothClass;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.ActivityNotFoundException;
 import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -24,8 +26,10 @@ import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.provider.ContactsContract;
+import android.provider.MediaStore;
 import androidx.core.content.FileProvider;
 import android.util.Base64;
 import android.util.SparseArray;
@@ -37,7 +41,9 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.view.autofill.AutofillValue;
 import android.webkit.CookieManager;
+import android.webkit.DownloadListener;
 import android.webkit.JsPromptResult;
+import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -91,6 +97,7 @@ public class MainActivity extends Activity {
     private static final int BARCODE_SCAN_REQUEST = 1004;
     private static final int REQUEST_BLUETOOTH_PERMISSION = 1005;
     private static final int REQUEST_NOTIFICATION_PERMISSION = 1006;
+    private static final int REQUEST_STORAGE_PERMISSION = 1007; // [BARU] Android 9 ke bawah
     private static final int REQUEST_APP_LOCK = 9999;
 
     private boolean isAppUnlocked = false;
@@ -106,10 +113,6 @@ public class MainActivity extends Activity {
     // =========================================
     // WEBVIEW KHUSUS: MENOLAK GOOGLE AUTOFILL
     // =========================================
-    // WebView biasa kadang tetap mengirim struktur form ke layanan
-    // Autofill (Google Password Manager) walau flag sudah dimatikan.
-    // Kelas ini memutus jalurnya langsung di level View.
-
     @TargetApi(Build.VERSION_CODES.O)
     private static class NoAutofillWebView extends WebView {
 
@@ -136,7 +139,7 @@ public class MainActivity extends Activity {
     private String getHomeUrl() {
         String url = APP_URL;
         if (!url.endsWith("/")) url += "/";
-        
+
         if (getPackageName().toLowerCase().contains("admin")) {
             if (!url.endsWith(".php")) url += "login.php";
         } else {
@@ -148,7 +151,7 @@ public class MainActivity extends Activity {
     private String getRootApiUrl() {
         String url = APP_URL;
         if (!url.endsWith("/")) url += "/";
-        return url.replace("admin/", ""); 
+        return url.replace("admin/", "");
     }
 
     private class ModernSpinner extends View {
@@ -172,16 +175,16 @@ public class MainActivity extends Activity {
             float pad = paint.getStrokeWidth() / 2f + 1f;
             rect.set(pad, pad, getWidth() - pad, getHeight() - pad);
             canvas.drawArc(rect, angle, 270, false, paint);
-            angle += 8; 
+            angle += 8;
             if (angle >= 360) angle -= 360;
-            invalidate(); 
+            invalidate();
         }
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
+
         try {
             if (getPackageName().toLowerCase().contains("admin")) {
                 FirebaseMessaging.getInstance().subscribeToTopic("admin_notif");
@@ -190,14 +193,13 @@ public class MainActivity extends Activity {
             }
         } catch (Exception e) {}
 
-        // Mengatur status bar biru dan navigation bar putih
         setSystemBarColors();
 
-        // 1. ROOT UTAMA (Dibuat biru agar status bar di atas terjamin aman berwarna biru)
+        // 1. ROOT UTAMA (biru)
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.parseColor("#1791f4"));
 
-        // 2. KOTAK PUTIH DI BAWAH (Khusus menutupi area gesture / navigation bar)
+        // 2. KOTAK PUTIH DI BAWAH
         View bottomWhiteBg = new View(this);
         bottomWhiteBg.setBackgroundColor(Color.WHITE);
         int navHeight = (int) (100 * getResources().getDisplayMetrics().density);
@@ -206,13 +208,10 @@ public class MainActivity extends Activity {
         bottomParams.gravity = Gravity.BOTTOM;
         root.addView(bottomWhiteBg, bottomParams);
 
-        // 3. PEMBUNGKUS WEBVIEW (Merespons status bar dan nav bar agar tidak tertutup)
+        // 3. PEMBUNGKUS WEBVIEW
         FrameLayout contentWrapper = new FrameLayout(this);
         contentWrapper.setFitsSystemWindows(true);
 
-        // =================================================================
-        // WEBVIEW ANTI AUTOFILL (menolak saran Google di level View)
-        // =================================================================
         webView = new NoAutofillWebView(this);
 
         webView.setFocusable(true);
@@ -232,31 +231,31 @@ public class MainActivity extends Activity {
         });
 
         contentWrapper.addView(webView, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, 
+                FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
 
         root.addView(contentWrapper, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, 
+                FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
 
-        // 4. SPLASH SCREEN (Menutupi seluruh layar di awal)
+        // 4. SPLASH SCREEN
         splash = new RelativeLayout(this);
-        splash.setBackgroundColor(Color.parseColor("#1791f4")); 
-        splash.setClickable(true); 
+        splash.setBackgroundColor(Color.parseColor("#1791f4"));
+        splash.setClickable(true);
         splash.setFocusable(true);
 
         ImageView bgImage = new ImageView(this);
         bgImage.setImageResource(getResources().getIdentifier("splash_logo", "drawable", getPackageName()));
-        bgImage.setScaleType(ImageView.ScaleType.CENTER_CROP); 
+        bgImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
         splash.addView(bgImage, new RelativeLayout.LayoutParams(
-                RelativeLayout.LayoutParams.MATCH_PARENT, 
+                RelativeLayout.LayoutParams.MATCH_PARENT,
                 RelativeLayout.LayoutParams.MATCH_PARENT));
 
         LinearLayout bottomLayout = new LinearLayout(this);
         bottomLayout.setOrientation(LinearLayout.VERTICAL);
         bottomLayout.setGravity(Gravity.CENTER);
         RelativeLayout.LayoutParams splashBottomParams = new RelativeLayout.LayoutParams(
-                RelativeLayout.LayoutParams.MATCH_PARENT, 
+                RelativeLayout.LayoutParams.MATCH_PARENT,
                 RelativeLayout.LayoutParams.WRAP_CONTENT);
         splashBottomParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
         splashBottomParams.bottomMargin = (int) (40 * getResources().getDisplayMetrics().density);
@@ -266,7 +265,7 @@ public class MainActivity extends Activity {
         loadingRow.setOrientation(LinearLayout.HORIZONTAL);
         loadingRow.setGravity(Gravity.CENTER);
 
-        ModernSpinner spinner = new ModernSpinner(this); 
+        ModernSpinner spinner = new ModernSpinner(this);
         LinearLayout.LayoutParams spinnerParams = new LinearLayout.LayoutParams(
                 (int) (20 * getResources().getDisplayMetrics().density),
                 (int) (20 * getResources().getDisplayMetrics().density)
@@ -285,38 +284,35 @@ public class MainActivity extends Activity {
         bottomLayout.addView(loadingRow);
 
         String appVersion = "1.0.0";
-        try { 
-            PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0); 
-            appVersion = pInfo.versionName; 
+        try {
+            PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+            appVersion = pInfo.versionName;
         } catch (Exception e) {}
 
         TextView version = new TextView(this);
-        version.setText("Versi " + appVersion); 
-        version.setTextColor(Color.parseColor("#EEEEEE")); 
+        version.setText("Versi " + appVersion);
+        version.setTextColor(Color.parseColor("#EEEEEE"));
         version.setTextSize(11);
         version.setShadowLayer(3, 1, 1, Color.parseColor("#40000000"));
-        
+
         LinearLayout.LayoutParams vParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, 
+                LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
-        vParams.topMargin = (int) (12 * getResources().getDisplayMetrics().density); 
+        vParams.topMargin = (int) (12 * getResources().getDisplayMetrics().density);
         bottomLayout.addView(version, vParams);
 
         root.addView(splash, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, 
+                FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(root);
 
-        // =================================================================
-        // MATIKAN AUTOFILL ANDROID (seluruh Activity + WebView)
-        // =================================================================
         disableAutofill(root, contentWrapper);
 
         if (SPLASH_TIME <= 0) {
             splash.setVisibility(View.GONE);
             isAppUnlocked = true;
             checkNotificationPermission();
-            
+
             if (!getPackageName().toLowerCase().contains("admin")) {
                 checkForAppUpdate();
             }
@@ -330,14 +326,15 @@ public class MainActivity extends Activity {
             @SuppressWarnings("deprecation")
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                if (url.startsWith("intent://") || url.startsWith("market://") || 
+                if (url.startsWith("intent://") || url.startsWith("market://") ||
                     url.startsWith("whatsapp://") || url.startsWith("tg://")) {
-                    try { 
-                        view.getContext().startActivity(Intent.parseUri(url, Intent.URI_INTENT_SCHEME)); 
-                        return true; 
-                    } catch (Exception e) {} 
+                    try {
+                        view.getContext().startActivity(Intent.parseUri(url, Intent.URI_INTENT_SCHEME));
+                        return true;
+                    } catch (Exception e) {}
                     return true;
                 }
+                // [BARU] biarkan URL unduhan ditangani WebView -> DownloadListener
                 return false;
             }
 
@@ -351,16 +348,12 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
 
-                saveCookies(); 
-                injectAndroidBridge(); 
+                saveCookies();
+                injectAndroidBridge();
                 sendFcmTokenToWeb();
 
-                // Terapkan kembali pemblokiran Autofill
                 disableAutofill(null, null);
 
-                // =================================
-                // MATIKAN AUTOCOMPLETE FORM HTML
-                // =================================
                 String javascript =
                     "(function() {" +
                     "var forms = document.querySelectorAll('form');" +
@@ -388,8 +381,8 @@ public class MainActivity extends Activity {
             @TargetApi(Build.VERSION_CODES.M)
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                if (request.isForMainFrame()) { 
-                    showOfflineScreen(view); 
+                if (request.isForMainFrame()) {
+                    showOfflineScreen(view);
                 }
             }
         });
@@ -406,15 +399,12 @@ public class MainActivity extends Activity {
         if (SPLASH_TIME > 0) {
             splashHandler.postDelayed(new Runnable() {
                 @Override
-                public void run() { 
-                    triggerNativeAppLock(); 
+                public void run() {
+                    triggerNativeAppLock();
                 }
             }, SPLASH_TIME);
         }
 
-        // =================================================================
-        // MENDUKUNG GESTURE BACK ANDROID 13+ (API 33 KE ATAS)
-        // =================================================================
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
                 OnBackInvokedDispatcher.PRIORITY_DEFAULT,
@@ -431,16 +421,13 @@ public class MainActivity extends Activity {
     // =========================================
     // DISABLE AUTOFILL
     // =========================================
-
     private void disableAutofill(View root, View contentWrapper) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 
-            // Matikan Autofill seluruh Activity
             getWindow().getDecorView().setImportantForAutofill(
                 View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
             );
 
-            // Matikan Autofill WebView
             if (webView != null) {
                 webView.setImportantForAutofill(
                     View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
@@ -469,14 +456,14 @@ public class MainActivity extends Activity {
                     URL url = new URL(getRootApiUrl() + "api/cache_version.txt?t=" + System.currentTimeMillis());
                     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                     conn.setConnectTimeout(5000);
-                    
+
                     if (conn.getResponseCode() == 200) {
                         BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
                         final String serverVersion = br.readLine().trim();
                         br.close();
 
                         final String localVersion = getSharedPreferences("CurvaPrefs", MODE_PRIVATE).getString("native_cache_version", "");
-                        
+
                         if (!serverVersion.isEmpty() && !serverVersion.equals(localVersion)) {
                             runOnUiThread(new Runnable() {
                                 @Override
@@ -494,69 +481,68 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    // Handler untuk menangani tombol back (dipanggil dari OnBackInvokedDispatcher atau onKeyDown)
     private void handleCustomBack() {
         if (webView != null) {
             webView.evaluateJavascript("javascript:(function() { var overlays = document.querySelectorAll('.show'); if (overlays.length > 0) { overlays.forEach(function(el) { el.classList.remove('show'); }); return 'true'; } return 'false'; })()", new ValueCallback<String>() {
                 @Override
                 public void onReceiveValue(String value) {
                     if (!"\"true\"".equals(value) && !"true".equals(value)) {
-                        if (webView.canGoBack()) { 
-                            webView.goBack(); 
-                        } else { 
-                            performDoubleBackToExit(); 
+                        if (webView.canGoBack()) {
+                            webView.goBack();
+                        } else {
+                            performDoubleBackToExit();
                         }
                     }
                 }
             });
-        } else { 
-            performDoubleBackToExit(); 
+        } else {
+            performDoubleBackToExit();
         }
     }
 
     private void performDoubleBackToExit() {
-        if (doubleBackToExitPressedOnce) { 
-            finish(); 
-            return; 
+        if (doubleBackToExitPressedOnce) {
+            finish();
+            return;
         }
         this.doubleBackToExitPressedOnce = true;
         showToast("Tekan sekali lagi untuk keluar aplikasi");
-        new Handler().postDelayed(new Runnable() { 
-            @Override 
-            public void run() { 
-                doubleBackToExitPressedOnce = false; 
-            } 
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                doubleBackToExitPressedOnce = false;
+            }
         }, 2000);
     }
 
     private void triggerNativeAppLock() {
         if (isAppUnlocked) return;
         if (!getSharedPreferences("CurvaPrefs", MODE_PRIVATE).getBoolean("is_app_lock_enabled", false)) {
-            unlockAppAndHideSplash(); 
+            unlockAppAndHideSplash();
             return;
         }
         android.app.KeyguardManager keyguardManager = (android.app.KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && keyguardManager != null && keyguardManager.isKeyguardSecure()) {
             Intent intent = keyguardManager.createConfirmDeviceCredentialIntent("Keamanan Curva Payment", "Gunakan identitas Anda untuk masuk.");
-            if (intent != null) { 
-                startActivityForResult(intent, REQUEST_APP_LOCK); 
-                return; 
+            if (intent != null) {
+                startActivityForResult(intent, REQUEST_APP_LOCK);
+                return;
             }
         }
         unlockAppAndHideSplash();
     }
 
     private void unlockAppAndHideSplash() {
-        isAppUnlocked = true; 
+        isAppUnlocked = true;
         splash.animate().alpha(0f).setDuration(450);
         delayHandler.postDelayed(new Runnable() {
-            @Override 
-            public void run() { 
-                splash.setVisibility(View.GONE); 
-                checkNotificationPermission(); 
-                
+            @Override
+            public void run() {
+                splash.setVisibility(View.GONE);
+                checkNotificationPermission();
+
                 if (!getPackageName().toLowerCase().contains("admin")) {
-                    checkForAppUpdate(); 
+                    checkForAppUpdate();
                 }
             }
         }, 500);
@@ -565,72 +551,72 @@ public class MainActivity extends Activity {
     private void checkNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             android.app.NotificationManager notificationManager = (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            if (notificationManager != null) { 
+            if (notificationManager != null) {
                 String channelId = getPackageName() + "_popup_v1";
-                android.app.NotificationChannel channel = new android.app.NotificationChannel(channelId, "Notifikasi Transaksi", android.app.NotificationManager.IMPORTANCE_HIGH); 
+                android.app.NotificationChannel channel = new android.app.NotificationChannel(channelId, "Notifikasi Transaksi", android.app.NotificationManager.IMPORTANCE_HIGH);
                 channel.enableVibration(true);
                 notificationManager.createNotificationChannel(channel);
             }
         }
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) { 
-            requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, REQUEST_NOTIFICATION_PERMISSION); 
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, REQUEST_NOTIFICATION_PERMISSION);
         }
     }
 
     private boolean isVersionOlder(String currentVersion, String serverVersion) {
         if (currentVersion == null || serverVersion == null) return false;
-        String[] currentParts = currentVersion.split("\\."); 
+        String[] currentParts = currentVersion.split("\\.");
         String[] serverParts = serverVersion.split("\\.");
         int length = Math.max(currentParts.length, serverParts.length);
-        
+
         for (int i = 0; i < length; i++) {
-            int currentPart = i < currentParts.length ? Integer.parseInt(currentParts[i]) : 0; 
+            int currentPart = i < currentParts.length ? Integer.parseInt(currentParts[i]) : 0;
             int serverPart = i < serverParts.length ? Integer.parseInt(serverParts[i]) : 0;
-            if (currentPart < serverPart) { return true; } 
+            if (currentPart < serverPart) { return true; }
             if (currentPart > serverPart) { return false; }
-        } 
+        }
         return false;
     }
 
     private void checkForAppUpdate() {
         new Thread(new Runnable() {
-            @Override 
+            @Override
             public void run() {
                 try {
-                    String bypassCacheUrl = getRootApiUrl() + "api/check_version.php?timestamp=" + System.currentTimeMillis(); 
-                    URL url = new URL(bypassCacheUrl); 
-                    HttpURLConnection conn = (HttpURLConnection) url.openConnection(); 
-                    conn.setRequestMethod("GET"); 
-                    conn.setUseCaches(false); 
-                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36"); 
-                    conn.setRequestProperty("Accept", "application/json"); 
-                    conn.setConnectTimeout(8000); 
+                    String bypassCacheUrl = getRootApiUrl() + "api/check_version.php?timestamp=" + System.currentTimeMillis();
+                    URL url = new URL(bypassCacheUrl);
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("GET");
+                    conn.setUseCaches(false);
+                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36");
+                    conn.setRequestProperty("Accept", "application/json");
+                    conn.setConnectTimeout(8000);
                     conn.setReadTimeout(8000);
-                    
+
                     if (conn.getResponseCode() == 200) {
-                        BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream())); 
-                        StringBuilder response = new StringBuilder(); 
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                        StringBuilder response = new StringBuilder();
                         String line;
-                        while ((line = reader.readLine()) != null) { 
-                            response.append(line); 
-                        } 
+                        while ((line = reader.readLine()) != null) {
+                            response.append(line);
+                        }
                         reader.close();
-                        
+
                         JSONObject json = new JSONObject(response.toString());
                         if (json.getBoolean("success")) {
-                            final String serverVersion = json.has("latest_version_name") ? json.getString("latest_version_name") : "1.0.0"; 
-                            final boolean forceUpdate = json.getBoolean("force_update"); 
-                            final String updateUrl = json.getString("update_url"); 
-                            final String releaseNotes = json.getString("release_notes"); 
+                            final String serverVersion = json.has("latest_version_name") ? json.getString("latest_version_name") : "1.0.0";
+                            final boolean forceUpdate = json.getBoolean("force_update");
+                            final String updateUrl = json.getString("update_url");
+                            final String releaseNotes = json.getString("release_notes");
                             final String currentVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-                            
-                            runOnUiThread(new Runnable() { 
-                                @Override 
-                                public void run() { 
-                                    if (isVersionOlder(currentVersion, serverVersion) && !isFinishing()) { 
-                                        showUpdateDialog(forceUpdate, updateUrl, releaseNotes); 
-                                    } 
-                                } 
+
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    if (isVersionOlder(currentVersion, serverVersion) && !isFinishing()) {
+                                        showUpdateDialog(forceUpdate, updateUrl, releaseNotes);
+                                    }
+                                }
                             });
                         }
                     }
@@ -640,96 +626,96 @@ public class MainActivity extends Activity {
     }
 
     private void showUpdateDialog(final boolean isForced, final String url, String notes) {
-        final android.app.Dialog dialog = new android.app.Dialog(MainActivity.this); 
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE); 
+        final android.app.Dialog dialog = new android.app.Dialog(MainActivity.this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setCancelable(!isForced);
-        if (dialog.getWindow() != null) { 
-            dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)); 
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
         }
-        
-        LinearLayout root = new LinearLayout(this); 
-        root.setOrientation(LinearLayout.VERTICAL); 
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(60, 60, 60, 60);
-        
-        android.graphics.drawable.GradientDrawable bgShape = new android.graphics.drawable.GradientDrawable(); 
-        bgShape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE); 
-        bgShape.setCornerRadius(50); 
-        bgShape.setColor(Color.WHITE); 
+
+        android.graphics.drawable.GradientDrawable bgShape = new android.graphics.drawable.GradientDrawable();
+        bgShape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+        bgShape.setCornerRadius(50);
+        bgShape.setColor(Color.WHITE);
         root.setBackground(bgShape);
-        
-        TextView title = new TextView(this); 
-        title.setText("Pembaruan Tersedia \uD83D\uDE80"); 
-        title.setTextSize(22); 
-        title.setTextColor(Color.parseColor("#1e293b")); 
-        title.setTypeface(null, android.graphics.Typeface.BOLD); 
-        title.setGravity(Gravity.CENTER); 
+
+        TextView title = new TextView(this);
+        title.setText("Pembaruan Tersedia \uD83D\uDE80");
+        title.setTextSize(22);
+        title.setTextColor(Color.parseColor("#1e293b"));
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setGravity(Gravity.CENTER);
         root.addView(title);
-        
-        TextView message = new TextView(this); 
-        message.setText(notes); 
-        message.setTextSize(15); 
-        message.setTextColor(Color.parseColor("#64748b")); 
-        message.setGravity(Gravity.LEFT); 
+
+        TextView message = new TextView(this);
+        message.setText(notes);
+        message.setTextSize(15);
+        message.setTextColor(Color.parseColor("#64748b"));
+        message.setGravity(Gravity.LEFT);
         message.setLineSpacing(0, 1.2f);
-        
+
         LinearLayout.LayoutParams msgParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 
-                LinearLayout.LayoutParams.WRAP_CONTENT); 
-        msgParams.setMargins(0, 50, 0, 60); 
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        msgParams.setMargins(0, 50, 0, 60);
         root.addView(message, msgParams);
-        
-        TextView btnUpdate = new TextView(this); 
-        btnUpdate.setText("Perbarui Sekarang"); 
-        btnUpdate.setTextColor(Color.WHITE); 
-        btnUpdate.setTextSize(16); 
-        btnUpdate.setTypeface(null, android.graphics.Typeface.BOLD); 
-        btnUpdate.setGravity(Gravity.CENTER); 
+
+        TextView btnUpdate = new TextView(this);
+        btnUpdate.setText("Perbarui Sekarang");
+        btnUpdate.setTextColor(Color.WHITE);
+        btnUpdate.setTextSize(16);
+        btnUpdate.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnUpdate.setGravity(Gravity.CENTER);
         btnUpdate.setPadding(0, 35, 0, 35);
-        
-        android.graphics.drawable.GradientDrawable btnShape = new android.graphics.drawable.GradientDrawable(); 
-        btnShape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE); 
-        btnShape.setCornerRadius(50); 
-        btnShape.setColor(Color.parseColor("#1791f4")); 
+
+        android.graphics.drawable.GradientDrawable btnShape = new android.graphics.drawable.GradientDrawable();
+        btnShape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+        btnShape.setCornerRadius(50);
+        btnShape.setColor(Color.parseColor("#1791f4"));
         btnUpdate.setBackground(btnShape);
-        
-        btnUpdate.setOnClickListener(new View.OnClickListener() { 
-            @Override 
-            public void onClick(View v) { 
-                dialog.dismiss(); 
-                try { 
-                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse((url != null && !url.isEmpty()) ? url : "https://curva.web.id/download.php"))); 
-                } catch (Exception e) {} 
-            } 
-        }); 
+
+        btnUpdate.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse((url != null && !url.isEmpty()) ? url : "https://curva.web.id/download.php")));
+                } catch (Exception e) {}
+            }
+        });
         root.addView(btnUpdate);
-        
+
         if (!isForced) {
-            TextView btnLater = new TextView(this); 
-            btnLater.setText("Nanti Saja"); 
-            btnLater.setTextColor(Color.parseColor("#94a3b8")); 
-            btnLater.setTextSize(15); 
-            btnLater.setTypeface(null, android.graphics.Typeface.BOLD); 
-            btnLater.setGravity(Gravity.CENTER); 
+            TextView btnLater = new TextView(this);
+            btnLater.setText("Nanti Saja");
+            btnLater.setTextColor(Color.parseColor("#94a3b8"));
+            btnLater.setTextSize(15);
+            btnLater.setTypeface(null, android.graphics.Typeface.BOLD);
+            btnLater.setGravity(Gravity.CENTER);
             btnLater.setPadding(0, 25, 0, 25);
-            
+
             LinearLayout.LayoutParams laterParams = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, 
-                    LinearLayout.LayoutParams.WRAP_CONTENT); 
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT);
             laterParams.setMargins(0, 30, 0, 0);
-            
-            btnLater.setOnClickListener(new View.OnClickListener() { 
-                @Override 
-                public void onClick(View v) { 
-                    dialog.dismiss(); 
-                } 
-            }); 
+
+            btnLater.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    dialog.dismiss();
+                }
+            });
             root.addView(btnLater, laterParams);
         }
-        
-        dialog.setContentView(root); 
-        if (dialog.getWindow() != null) { 
-            dialog.getWindow().setLayout((int) (getResources().getDisplayMetrics().widthPixels * 0.85), android.view.ViewGroup.LayoutParams.WRAP_CONTENT); 
-        } 
+
+        dialog.setContentView(root);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout((int) (getResources().getDisplayMetrics().widthPixels * 0.85), android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
         dialog.show();
     }
 
@@ -740,42 +726,45 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent); 
+        super.onNewIntent(intent);
         setIntent(intent);
         if (intent != null && intent.getExtras() != null) {
             String newUrl = handleDeepLink(intent);
-            if (!newUrl.equals(getHomeUrl())) { 
-                if (isNetworkAvailable()) { 
-                    webView.loadUrl(newUrl); 
-                } else { 
-                    showOfflineScreen(webView); 
-                } 
+            if (!newUrl.equals(getHomeUrl())) {
+                if (isNetworkAvailable()) {
+                    webView.loadUrl(newUrl);
+                } else {
+                    showOfflineScreen(webView);
+                }
             }
         }
     }
 
     private String handleDeepLink(Intent intent) {
-        String urlToLoad = getHomeUrl(); 
+        String urlToLoad = getHomeUrl();
         if (intent != null && intent.getExtras() != null) {
             String type = intent.getStringExtra("type");
             if ("deposit_success".equals(type)) {
-                String notifId = intent.getStringExtra("notification_id"); 
+                String notifId = intent.getStringExtra("notification_id");
                 urlToLoad = getRootApiUrl() + (notifId != null ? "user/notifications.php?show_id=" + notifId : "user/notifications.php");
             } else if ("transaction_success".equals(type) || "transaction_failed".equals(type)) {
-                String trxId = intent.getStringExtra("transaction_id"); 
-                if (trxId != null) { 
-                    urlToLoad = getRootApiUrl() + "user/transaction_detail.php?id=" + trxId; 
+                String trxId = intent.getStringExtra("transaction_id");
+                if (trxId != null) {
+                    urlToLoad = getRootApiUrl() + "user/transaction_detail.php?id=" + trxId;
                 }
             } else if (intent.hasExtra("target_url")) {
-                String target = intent.getStringExtra("target_url"); 
-                if (target != null && !target.isEmpty()) { 
-                    urlToLoad = target.startsWith("http") ? target : getRootApiUrl() + (target.startsWith("/") ? target.substring(1) : target); 
+                String target = intent.getStringExtra("target_url");
+                if (target != null && !target.isEmpty()) {
+                    urlToLoad = target.startsWith("http") ? target : getRootApiUrl() + (target.startsWith("/") ? target.substring(1) : target);
                 }
             }
         }
         return urlToLoad;
     }
 
+    // =================================================================
+    // SHIM BRIDGE  [BARU: savePdf & saveFile di 2 baris terakhir]
+    // =================================================================
     private void injectAndroidBridge() {
         String js = "javascript:(function(){ if (typeof window.Android === 'undefined') { window.Android = {" +
                 "getContacts: function() { return prompt('AndroidBridge:getContacts', ''); }," +
@@ -791,7 +780,9 @@ public class MainActivity extends Activity {
                 "updateFCMToken: function() { prompt('AndroidBridge:updateFCMToken', ''); }," +
                 "setAppLock: function(status) { prompt('AndroidBridge:setAppLock', status); }," +
                 "getPrinters: function() { return prompt('AndroidBridge:getPrinters', ''); }," +
-                "printReceiptMAC: function(data) { prompt('AndroidBridge:printReceiptMAC', data); }" +
+                "printReceiptMAC: function(data) { prompt('AndroidBridge:printReceiptMAC', data); }," +
+                "savePdf: function(base64, filename) { return prompt('AndroidBridge:savePdf', base64 + '|||SPLIT|||' + (filename || 'File.pdf')); }," +
+                "saveFile: function(base64, filename, mime) { return prompt('AndroidBridge:saveFile', base64 + '|||SPLIT|||' + (filename || 'File.pdf') + '|||SPLIT|||' + (mime || 'application/pdf')); }" +
                 "}; } })()";
         webView.evaluateJavascript(js, null);
     }
@@ -799,109 +790,126 @@ public class MainActivity extends Activity {
     private boolean handleAndroidBridge(String message, String defaultValue, JsPromptResult result) {
         if (message != null && message.startsWith("AndroidBridge:")) {
             String action = message.replace("AndroidBridge:", "");
-            
-            if (action.equals("getContacts")) { 
-                result.confirm(getContactsFromDevice()); 
-                return true; 
-            } else if (action.equals("requestContactPermission")) { 
-                requestContactPermission(); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("showToast")) { 
-                showToast(defaultValue); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("openContactPicker")) { 
-                openContactPicker(); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("scanBarcode")) { 
-                scanBarcode(); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("shareImage")) { 
-                shareImage(defaultValue); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("openApp")) { 
-                openAppNative(defaultValue); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("updateFCMToken")) { 
-                runOnUiThread(new Runnable() { 
-                    @Override 
-                    public void run() { 
-                        sendFcmTokenToWeb(); 
-                    } 
-                }); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("setAppLock")) { 
-                getSharedPreferences("CurvaPrefs", MODE_PRIVATE).edit().putBoolean("is_app_lock_enabled", defaultValue.equals("true")).apply(); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("retryConnection")) { 
-                runOnUiThread(new Runnable() { 
-                    @Override 
-                    public void run() { 
-                        if (isNetworkAvailable()) { 
-                            webView.loadUrl(getHomeUrl()); 
-                        } else { 
-                            showToast("Koneksi internet masih terputus."); 
-                        } 
-                    } 
-                }); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("shareReceiptText")) { 
-                String base64Str = defaultValue; 
-                String captionStr = "Berikut adalah bukti pembayaran."; 
-                if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) { 
-                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|"); 
-                    base64Str = parts.length > 0 ? parts[0] : ""; 
-                    captionStr = parts.length > 1 ? parts[1] : ""; 
-                } 
-                shareReceiptText(base64Str, captionStr); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("saveImage")) { 
-                String base64Str = defaultValue; 
-                String fileNameStr = "QRIS_Deposit.png"; 
-                if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) { 
-                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|"); 
-                    base64Str = parts.length > 0 ? parts[0] : ""; 
-                    fileNameStr = parts.length > 1 ? parts[1] : "QRIS_Deposit.png"; 
-                } 
-                saveImage(base64Str, fileNameStr); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("printReceipt")) { 
-                String textToPrint = defaultValue; 
-                String logoBase64 = ""; 
-                if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) { 
-                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|"); 
-                    textToPrint = parts.length > 0 ? parts[0] : ""; 
-                    logoBase64 = parts.length > 1 ? parts[1] : ""; 
-                } 
-                autoPrintReceipt(textToPrint, logoBase64); 
-                result.confirm(""); 
-                return true; 
-            } else if (action.equals("getPrinters")) { 
-                result.confirm(getPairedPrintersList()); 
-                return true; 
-            } else if (action.equals("printReceiptMAC")) { 
-                String textToPrint = ""; 
-                String logoBase64 = ""; 
-                String macAddress = ""; 
-                if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) { 
-                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|"); 
-                    textToPrint = parts.length > 0 ? parts[0] : ""; 
-                    logoBase64 = parts.length > 1 ? parts[1] : ""; 
-                    macAddress = parts.length > 2 ? parts[2] : ""; 
-                } 
-                printToSpecificPrinter(textToPrint, logoBase64, macAddress); 
-                result.confirm(""); 
-                return true; 
+
+            if (action.equals("getContacts")) {
+                result.confirm(getContactsFromDevice());
+                return true;
+            } else if (action.equals("requestContactPermission")) {
+                requestContactPermission();
+                result.confirm("");
+                return true;
+            } else if (action.equals("showToast")) {
+                showToast(defaultValue);
+                result.confirm("");
+                return true;
+            } else if (action.equals("openContactPicker")) {
+                openContactPicker();
+                result.confirm("");
+                return true;
+            } else if (action.equals("scanBarcode")) {
+                scanBarcode();
+                result.confirm("");
+                return true;
+            } else if (action.equals("shareImage")) {
+                shareImage(defaultValue);
+                result.confirm("");
+                return true;
+            } else if (action.equals("openApp")) {
+                openAppNative(defaultValue);
+                result.confirm("");
+                return true;
+            } else if (action.equals("updateFCMToken")) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        sendFcmTokenToWeb();
+                    }
+                });
+                result.confirm("");
+                return true;
+            } else if (action.equals("setAppLock")) {
+                getSharedPreferences("CurvaPrefs", MODE_PRIVATE).edit().putBoolean("is_app_lock_enabled", defaultValue.equals("true")).apply();
+                result.confirm("");
+                return true;
+            } else if (action.equals("retryConnection")) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (isNetworkAvailable()) {
+                            webView.loadUrl(getHomeUrl());
+                        } else {
+                            showToast("Koneksi internet masih terputus.");
+                        }
+                    }
+                });
+                result.confirm("");
+                return true;
+            } else if (action.equals("shareReceiptText")) {
+                String base64Str = defaultValue;
+                String captionStr = "Berikut adalah bukti pembayaran.";
+                if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) {
+                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|");
+                    base64Str = parts.length > 0 ? parts[0] : "";
+                    captionStr = parts.length > 1 ? parts[1] : "";
+                }
+                shareReceiptText(base64Str, captionStr);
+                result.confirm("");
+                return true;
+            } else if (action.equals("saveImage")) {
+                String base64Str = defaultValue;
+                String fileNameStr = "QRIS_Deposit.png";
+                if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) {
+                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|");
+                    base64Str = parts.length > 0 ? parts[0] : "";
+                    fileNameStr = parts.length > 1 ? parts[1] : "QRIS_Deposit.png";
+                }
+                saveImage(base64Str, fileNameStr);
+                result.confirm("");
+                return true;
+
+            // ================= [BARU] SIMPAN PDF / FILE =================
+            } else if (action.equals("savePdf") || action.equals("saveFile")) {
+                String b64   = defaultValue == null ? "" : defaultValue;
+                String fname = "Branding.pdf";
+                String mime  = "application/pdf";
+                if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) {
+                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|");
+                    b64   = parts.length > 0 ? parts[0] : "";
+                    fname = parts.length > 1 ? parts[1] : "Branding.pdf";
+                    mime  = parts.length > 2 ? parts[2] : "application/pdf";
+                }
+                result.confirm("OK");              // lepas blokir JS dulu
+                savePdfNative(b64, fname, mime);   // kerja berat di thread latar
+                return true;
+            // ============================================================
+
+            } else if (action.equals("printReceipt")) {
+                String textToPrint = defaultValue;
+                String logoBase64 = "";
+                if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) {
+                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|");
+                    textToPrint = parts.length > 0 ? parts[0] : "";
+                    logoBase64 = parts.length > 1 ? parts[1] : "";
+                }
+                autoPrintReceipt(textToPrint, logoBase64);
+                result.confirm("");
+                return true;
+            } else if (action.equals("getPrinters")) {
+                result.confirm(getPairedPrintersList());
+                return true;
+            } else if (action.equals("printReceiptMAC")) {
+                String textToPrint = "";
+                String logoBase64 = "";
+                String macAddress = "";
+                if (defaultValue != null && defaultValue.contains("|||SPLIT|||")) {
+                    String[] parts = defaultValue.split("\\|\\|\\|SPLIT\\|\\|\\|");
+                    textToPrint = parts.length > 0 ? parts[0] : "";
+                    logoBase64 = parts.length > 1 ? parts[1] : "";
+                    macAddress = parts.length > 2 ? parts[2] : "";
+                }
+                printToSpecificPrinter(textToPrint, logoBase64, macAddress);
+                result.confirm("");
+                return true;
             }
         }
         return false;
@@ -915,10 +923,7 @@ public class MainActivity extends Activity {
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        
-        // =================================================================
-        // MATIKAN FITUR PENYIMPANAN FORM & PASSWORD BAWAAN WEBVIEW
-        // =================================================================
+
         settings.setSaveFormData(false);
         settings.setSavePassword(false);
         webView.clearFormData();
@@ -974,31 +979,194 @@ public class MainActivity extends Activity {
                 return super.onJsPrompt(view, url, message, defaultValue, result);
             }
         });
+
+        // =================================================================
+        // [BARU] DOWNLOAD LISTENER (untuk URL server / file non-blob)
+        // =================================================================
+        webView.setDownloadListener(new DownloadListener() {
+            @Override
+            public void onDownloadStart(String url, String userAgent, String contentDisposition,
+                                        String mimeType, long contentLength) {
+                if (url == null) return;
+
+                if (url.startsWith("blob:") || url.startsWith("data:")) {
+                    showToast("File ini harus disimpan lewat tombol aplikasi");
+                    return; // DownloadManager tidak mendukung blob/data
+                }
+                try {
+                    String name = URLUtil.guessFileName(url, contentDisposition, mimeType);
+                    DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
+
+                    String cookie = CookieManager.getInstance().getCookie(url);
+                    if (cookie != null) req.addRequestHeader("Cookie", cookie); // bawa sesi login
+                    if (userAgent != null) req.addRequestHeader("User-Agent", userAgent);
+
+                    req.setTitle(name);
+                    req.setDescription("Mengunduh dari Curva Payment");
+                    req.setMimeType(mimeType == null ? "application/octet-stream" : mimeType);
+                    req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                    req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name);
+
+                    DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                    if (dm != null) {
+                        dm.enqueue(req);
+                        showToast("Mengunduh " + name);
+                    }
+                } catch (Exception e) {
+                    showToast("Gagal memulai unduhan: " + e.getMessage());
+                }
+            }
+        });
+    }
+
+    // =================================================================
+    // [BARU] SIMPAN PDF KE FOLDER DOWNLOAD PUBLIK
+    // =================================================================
+    private void savePdfNative(final String base64String, final String fileName, final String mimeType) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    String pure = base64String == null ? "" : base64String.trim();
+                    if (pure.startsWith("data:")) {
+                        int c = pure.indexOf(',');
+                        if (c > 0) pure = pure.substring(c + 1);
+                    }
+                    if (pure.isEmpty()) { notifyPdfResult(false, "Data PDF kosong"); return; }
+
+                    final byte[] bytes = Base64.decode(pure, Base64.DEFAULT);
+                    if (bytes.length < 5 || bytes[0] != '%' || bytes[1] != 'P'
+                            || bytes[2] != 'D' || bytes[3] != 'F') {
+                        notifyPdfResult(false, "Data yang diterima bukan file PDF");
+                        return;
+                    }
+
+                    String name = (fileName == null || fileName.trim().isEmpty())
+                            ? "Branding.pdf" : fileName.trim();
+                    name = name.replaceAll("[^A-Za-z0-9._-]", "_");
+                    if (!name.toLowerCase().endsWith(".pdf")) name += ".pdf";
+                    final String finalName = name;
+                    final String mime = (mimeType == null || mimeType.isEmpty())
+                            ? "application/pdf" : mimeType;
+
+                    Uri savedUri;
+
+                    if (Build.VERSION.SDK_INT >= 29) {
+                        // ---------- Android 10+ : tanpa izin penyimpanan ----------
+                        ContentValues v = new ContentValues();
+                        v.put(MediaStore.Downloads.DISPLAY_NAME, finalName);
+                        v.put(MediaStore.Downloads.MIME_TYPE, mime);
+                        v.put(MediaStore.Downloads.IS_PENDING, 1);
+
+                        ContentResolver cr = getContentResolver();
+                        Uri uri = cr.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+                        if (uri == null) throw new IOException("MediaStore menolak file");
+
+                        OutputStream os = cr.openOutputStream(uri);
+                        if (os == null) throw new IOException("Stream tidak tersedia");
+                        os.write(bytes);
+                        os.flush();
+                        os.close();
+
+                        v.clear();
+                        v.put(MediaStore.Downloads.IS_PENDING, 0);
+                        cr.update(uri, v, null, null);
+                        savedUri = uri;
+
+                    } else {
+                        // ---------- Android 6 - 9 : butuh izin tulis ----------
+                        if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(
+                                android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                != PackageManager.PERMISSION_GRANTED) {
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    requestPermissions(new String[]{
+                                            android.Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                                            REQUEST_STORAGE_PERMISSION);
+                                }
+                            });
+                            notifyPdfResult(false, "Izinkan akses penyimpanan, lalu ulangi Download");
+                            return;
+                        }
+                        File dir = Environment.getExternalStoragePublicDirectory(
+                                Environment.DIRECTORY_DOWNLOADS);
+                        if (!dir.exists()) dir.mkdirs();
+                        File f = new File(dir, finalName);
+                        FileOutputStream fos = new FileOutputStream(f);
+                        fos.write(bytes);
+                        fos.flush();
+                        fos.close();
+                        sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(f)));
+                        savedUri = FileProvider.getUriForFile(MainActivity.this,
+                                getPackageName() + ".fileprovider", f);
+                    }
+
+                    notifyPdfResult(true, "PDF tersimpan di folder Download: " + finalName);
+                    openSavedPdf(savedUri, mime); // hapus baris ini bila tidak ingin langsung dibuka
+
+                } catch (final Exception e) {
+                    notifyPdfResult(false, "Gagal menyimpan PDF: " + e.getMessage());
+                }
+            }
+        }).start();
+    }
+
+    // [BARU] buka file dengan aplikasi pembaca PDF (bila ada)
+    private void openSavedPdf(final Uri uri, final String mime) {
+        if (uri == null) return;
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Intent i = new Intent(Intent.ACTION_VIEW);
+                    i.setDataAndType(uri, mime);
+                    i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(i);
+                } catch (Exception e) {
+                    // tidak ada pembaca PDF terpasang: file tetap tersimpan
+                }
+            }
+        });
+    }
+
+    // [BARU] laporan hasil kembali ke halaman web + toast native
+    private void notifyPdfResult(final boolean ok, final String msg) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(MainActivity.this, msg, Toast.LENGTH_LONG).show();
+                String js = "javascript:if(typeof onPdfSaveResult==='function'){onPdfSaveResult("
+                        + (ok ? "true" : "false") + ", " + JSONObject.quote(msg) + ");}";
+                webView.evaluateJavascript(js, null);
+            }
+        });
     }
 
     private String getPairedPrintersList() {
         final BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) { 
-            return "NOT_SUPPORTED"; 
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
+            return "NOT_SUPPORTED";
         }
-        if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission("android.permission.BLUETOOTH_CONNECT") != PackageManager.PERMISSION_GRANTED) { 
-            requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT"}, REQUEST_BLUETOOTH_PERMISSION); 
-            return "[]"; 
+        if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission("android.permission.BLUETOOTH_CONNECT") != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT"}, REQUEST_BLUETOOTH_PERMISSION);
+            return "[]";
         }
-        
-        JSONArray arr = new JSONArray(); 
+
+        JSONArray arr = new JSONArray();
         Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
-        
+
         for (BluetoothDevice device : pairedDevices) {
-            try { 
-                String name = device.getName() != null ? device.getName() : "Printer"; 
-                int majorClass = device.getBluetoothClass() != null ? device.getBluetoothClass().getMajorDeviceClass() : -1; 
-                if (majorClass == BluetoothClass.Device.Major.IMAGING || name.toLowerCase().contains("print") || name.toLowerCase().contains("mtp") || name.toLowerCase().contains("zj") || name.toLowerCase().contains("58") || name.toLowerCase().contains("80") || name.toLowerCase().contains("pt-") || name.toLowerCase().contains("blue")) { 
-                    JSONObject obj = new JSONObject(); 
-                    obj.put("name", name); 
-                    obj.put("mac", device.getAddress()); 
-                    arr.put(obj); 
-                } 
+            try {
+                String name = device.getName() != null ? device.getName() : "Printer";
+                int majorClass = device.getBluetoothClass() != null ? device.getBluetoothClass().getMajorDeviceClass() : -1;
+                if (majorClass == BluetoothClass.Device.Major.IMAGING || name.toLowerCase().contains("print") || name.toLowerCase().contains("mtp") || name.toLowerCase().contains("zj") || name.toLowerCase().contains("58") || name.toLowerCase().contains("80") || name.toLowerCase().contains("pt-") || name.toLowerCase().contains("blue")) {
+                    JSONObject obj = new JSONObject();
+                    obj.put("name", name);
+                    obj.put("mac", device.getAddress());
+                    arr.put(obj);
+                }
             } catch (Exception e) {}
         }
         return arr.toString();
@@ -1006,416 +1174,423 @@ public class MainActivity extends Activity {
 
     private void printToSpecificPrinter(final String textToPrint, final String logoBase64, final String macAddress) {
         final BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled() || macAddress == null || macAddress.isEmpty()) { 
-            notifyWebPrintFailed("Gagal menyambung. Bluetooth tidak aktif atau MAC salah."); 
-            return; 
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled() || macAddress == null || macAddress.isEmpty()) {
+            notifyWebPrintFailed("Gagal menyambung. Bluetooth tidak aktif atau MAC salah.");
+            return;
         }
-        
+
         new Thread(new Runnable() {
-            @Override 
+            @Override
             public void run() {
                 try {
-                    BluetoothDevice device = bluetoothAdapter.getRemoteDevice(macAddress); 
-                    UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"); 
+                    BluetoothDevice device = bluetoothAdapter.getRemoteDevice(macAddress);
+                    UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
                     byte[] imageBytes = null;
-                    
-                    if (logoBase64 != null && logoBase64.startsWith("data:image")) { 
-                        try { 
-                            String pureBase64 = logoBase64.substring(logoBase64.indexOf(",") + 1); 
-                            byte[] decodedString = Base64.decode(pureBase64, Base64.DEFAULT); 
-                            Bitmap bitmap = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length); 
-                            if(bitmap != null){ 
-                                int targetWidth = 360; 
-                                targetWidth = (targetWidth / 8) * 8; 
-                                int targetHeight = (int) (bitmap.getHeight() * ((float) targetWidth / bitmap.getWidth())); 
-                                Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true); 
-                                imageBytes = decodeBitmapToEscPos(scaledBitmap); 
-                            } 
-                        } catch (Exception e) {} 
+
+                    if (logoBase64 != null && logoBase64.startsWith("data:image")) {
+                        try {
+                            String pureBase64 = logoBase64.substring(logoBase64.indexOf(",") + 1);
+                            byte[] decodedString = Base64.decode(pureBase64, Base64.DEFAULT);
+                            Bitmap bitmap = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+                            if (bitmap != null) {
+                                int targetWidth = 360;
+                                targetWidth = (targetWidth / 8) * 8;
+                                int targetHeight = (int) (bitmap.getHeight() * ((float) targetWidth / bitmap.getWidth()));
+                                Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true);
+                                imageBytes = decodeBitmapToEscPos(scaledBitmap);
+                            }
+                        } catch (Exception e) {}
                     }
-                    
-                    BluetoothSocket socket = device.createRfcommSocketToServiceRecord(uuid); 
-                    socket.connect(); 
-                    OutputStream outputStream = socket.getOutputStream(); 
-                    outputStream.write(new byte[]{27, 64}); 
-                    
-                    if (imageBytes != null) { 
-                        outputStream.write(new byte[]{27, 97, 1}); 
-                        outputStream.flush(); 
-                        int chunkSize = 256; 
-                        for (int i = 0; i < imageBytes.length; i += chunkSize) { 
-                            int length = Math.min(chunkSize, imageBytes.length - i); 
-                            outputStream.write(imageBytes, i, length); 
-                            outputStream.flush(); 
-                            Thread.sleep(15); 
-                        } 
-                        outputStream.write("\n\n".getBytes()); 
-                        outputStream.flush(); 
-                        Thread.sleep(400); 
+
+                    BluetoothSocket socket = device.createRfcommSocketToServiceRecord(uuid);
+                    socket.connect();
+                    OutputStream outputStream = socket.getOutputStream();
+                    outputStream.write(new byte[]{27, 64});
+
+                    if (imageBytes != null) {
+                        outputStream.write(new byte[]{27, 97, 1});
+                        outputStream.flush();
+                        int chunkSize = 256;
+                        for (int i = 0; i < imageBytes.length; i += chunkSize) {
+                            int length = Math.min(chunkSize, imageBytes.length - i);
+                            outputStream.write(imageBytes, i, length);
+                            outputStream.flush();
+                            Thread.sleep(15);
+                        }
+                        outputStream.write("\n\n".getBytes());
+                        outputStream.flush();
+                        Thread.sleep(400);
                     }
-                    
-                    outputStream.write(textToPrint.getBytes("UTF-8")); 
-                    outputStream.write("\n\n\n".getBytes()); 
-                    outputStream.flush(); 
-                    socket.close(); 
-                    
-                    final String pName = device.getName(); 
-                    runOnUiThread(new Runnable() { 
-                        @Override 
-                        public void run() { 
-                            webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(true, 'Berhasil mencetak di printer: " + pName + "');}", null); 
-                        } 
+
+                    outputStream.write(textToPrint.getBytes("UTF-8"));
+                    outputStream.write("\n\n\n".getBytes());
+                    outputStream.flush();
+                    socket.close();
+
+                    final String pName = device.getName();
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(true, 'Berhasil mencetak di printer: " + pName + "');}", null);
+                        }
                     });
-                } catch (Exception e) { 
-                    notifyWebPrintFailed("Gagal terhubung ke printer. Pastikan printer menyala."); 
+                } catch (Exception e) {
+                    notifyWebPrintFailed("Gagal terhubung ke printer. Pastikan printer menyala.");
                 }
             }
         }).start();
     }
 
-    private void notifyWebPrintFailed(final String msg) { 
-        runOnUiThread(new Runnable() { 
-            @Override 
-            public void run() { 
-                webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(false, '" + msg + "');}", null); 
-            } 
-        }); 
+    private void notifyWebPrintFailed(final String msg) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(false, '" + msg + "');}", null);
+            }
+        });
     }
 
     private void autoPrintReceipt(final String textToPrint, final String logoBase64) {
         final BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (bluetoothAdapter == null) { 
-            notifyWebPrintFailed("Perangkat tidak mendukung Bluetooth"); 
-            return; 
+        if (bluetoothAdapter == null) {
+            notifyWebPrintFailed("Perangkat tidak mendukung Bluetooth");
+            return;
         }
-        if (!bluetoothAdapter.isEnabled()) { 
-            notifyWebPrintFailed("Silakan aktifkan Bluetooth HP Anda"); 
-            return; 
+        if (!bluetoothAdapter.isEnabled()) {
+            notifyWebPrintFailed("Silakan aktifkan Bluetooth HP Anda");
+            return;
         }
-        if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission("android.permission.BLUETOOTH_CONNECT") != PackageManager.PERMISSION_GRANTED) { 
-            requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT"}, REQUEST_BLUETOOTH_PERMISSION); 
-            notifyWebPrintFailed("Izin Bluetooth belum diberikan"); 
-            return; 
+        if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission("android.permission.BLUETOOTH_CONNECT") != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT"}, REQUEST_BLUETOOTH_PERMISSION);
+            notifyWebPrintFailed("Izin Bluetooth belum diberikan");
+            return;
         }
-        
-        final Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices(); 
-        if (pairedDevices.size() == 0) { 
-            notifyWebPrintFailed("Belum ada printer yang di-pairing"); 
-            return; 
+
+        final Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
+        if (pairedDevices.size() == 0) {
+            notifyWebPrintFailed("Belum ada printer yang di-pairing");
+            return;
         }
-        
-        final ArrayList<BluetoothDevice> likelyPrinters = new ArrayList<>(); 
+
+        final ArrayList<BluetoothDevice> likelyPrinters = new ArrayList<>();
         final ArrayList<BluetoothDevice> otherDevices = new ArrayList<>();
-        
-        for (BluetoothDevice device : pairedDevices) { 
-            String name = device.getName() != null ? device.getName().toLowerCase() : ""; 
-            int majorClass = device.getBluetoothClass() != null ? device.getBluetoothClass().getMajorDeviceClass() : -1; 
-            if (majorClass == BluetoothClass.Device.Major.AUDIO_VIDEO || majorClass == BluetoothClass.Device.Major.PHONE || majorClass == BluetoothClass.Device.Major.COMPUTER) { 
-                continue; 
-            } 
-            if (majorClass == BluetoothClass.Device.Major.IMAGING || name.contains("print") || name.contains("mtp") || name.contains("zj") || name.contains("58") || name.contains("80") || name.contains("pt-") || name.contains("blue")) { 
-                likelyPrinters.add(device); 
-            } else { 
-                otherDevices.add(device); 
-            } 
+
+        for (BluetoothDevice device : pairedDevices) {
+            String name = device.getName() != null ? device.getName().toLowerCase() : "";
+            int majorClass = device.getBluetoothClass() != null ? device.getBluetoothClass().getMajorDeviceClass() : -1;
+            if (majorClass == BluetoothClass.Device.Major.AUDIO_VIDEO || majorClass == BluetoothClass.Device.Major.PHONE || majorClass == BluetoothClass.Device.Major.COMPUTER) {
+                continue;
+            }
+            if (majorClass == BluetoothClass.Device.Major.IMAGING || name.contains("print") || name.contains("mtp") || name.contains("zj") || name.contains("58") || name.contains("80") || name.contains("pt-") || name.contains("blue")) {
+                likelyPrinters.add(device);
+            } else {
+                otherDevices.add(device);
+            }
         }
-        
-        final ArrayList<BluetoothDevice> devicesToTry = new ArrayList<>(); 
-        devicesToTry.addAll(likelyPrinters); 
+
+        final ArrayList<BluetoothDevice> devicesToTry = new ArrayList<>();
+        devicesToTry.addAll(likelyPrinters);
         devicesToTry.addAll(otherDevices);
-        
-        if (devicesToTry.isEmpty()) { 
-            notifyWebPrintFailed("Tidak ada perangkat tipe printer"); 
-            return; 
+
+        if (devicesToTry.isEmpty()) {
+            notifyWebPrintFailed("Tidak ada perangkat tipe printer");
+            return;
         }
 
         new Thread(new Runnable() {
-            @Override 
+            @Override
             public void run() {
-                boolean isPrinted = false; 
-                String printerName = ""; 
-                UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"); 
+                boolean isPrinted = false;
+                String printerName = "";
+                UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
                 byte[] imageBytes = null;
-                
-                if (logoBase64 != null && logoBase64.startsWith("data:image")) { 
-                    try { 
-                        String pureBase64 = logoBase64.substring(logoBase64.indexOf(",") + 1); 
-                        byte[] decodedString = Base64.decode(pureBase64, Base64.DEFAULT); 
-                        Bitmap bitmap = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length); 
-                        if(bitmap != null){ 
-                            int targetWidth = 360; 
-                            targetWidth = (targetWidth / 8) * 8; 
-                            int targetHeight = (int) (bitmap.getHeight() * ((float) targetWidth / bitmap.getWidth())); 
-                            Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true); 
-                            imageBytes = decodeBitmapToEscPos(scaledBitmap); 
-                        } 
-                    } catch (Exception e) {} 
-                }
-                
-                for (BluetoothDevice device : devicesToTry) {
-                    try { 
-                        BluetoothSocket socket = device.createRfcommSocketToServiceRecord(uuid); 
-                        socket.connect(); 
-                        OutputStream outputStream = socket.getOutputStream(); 
-                        outputStream.write(new byte[]{27, 64}); 
-                        
-                        if (imageBytes != null) { 
-                            outputStream.write(new byte[]{27, 97, 1}); 
-                            outputStream.flush(); 
-                            int chunkSize = 256; 
-                            for (int i = 0; i < imageBytes.length; i += chunkSize) { 
-                                int length = Math.min(chunkSize, imageBytes.length - i); 
-                                outputStream.write(imageBytes, i, length); 
-                                outputStream.flush(); 
-                                Thread.sleep(15); 
-                            } 
-                            outputStream.write("\n\n".getBytes()); 
-                            outputStream.flush(); 
-                            Thread.sleep(400); 
+
+                if (logoBase64 != null && logoBase64.startsWith("data:image")) {
+                    try {
+                        String pureBase64 = logoBase64.substring(logoBase64.indexOf(",") + 1);
+                        byte[] decodedString = Base64.decode(pureBase64, Base64.DEFAULT);
+                        Bitmap bitmap = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+                        if (bitmap != null) {
+                            int targetWidth = 360;
+                            targetWidth = (targetWidth / 8) * 8;
+                            int targetHeight = (int) (bitmap.getHeight() * ((float) targetWidth / bitmap.getWidth()));
+                            Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true);
+                            imageBytes = decodeBitmapToEscPos(scaledBitmap);
                         }
-                        
-                        outputStream.write(textToPrint.getBytes("UTF-8")); 
-                        outputStream.write("\n\n\n".getBytes()); 
-                        outputStream.flush(); 
-                        socket.close(); 
-                        isPrinted = true; 
-                        printerName = device.getName(); 
-                        break; 
-                    } catch (Exception e) { 
-                        continue; 
+                    } catch (Exception e) {}
+                }
+
+                for (BluetoothDevice device : devicesToTry) {
+                    try {
+                        BluetoothSocket socket = device.createRfcommSocketToServiceRecord(uuid);
+                        socket.connect();
+                        OutputStream outputStream = socket.getOutputStream();
+                        outputStream.write(new byte[]{27, 64});
+
+                        if (imageBytes != null) {
+                            outputStream.write(new byte[]{27, 97, 1});
+                            outputStream.flush();
+                            int chunkSize = 256;
+                            for (int i = 0; i < imageBytes.length; i += chunkSize) {
+                                int length = Math.min(chunkSize, imageBytes.length - i);
+                                outputStream.write(imageBytes, i, length);
+                                outputStream.flush();
+                                Thread.sleep(15);
+                            }
+                            outputStream.write("\n\n".getBytes());
+                            outputStream.flush();
+                            Thread.sleep(400);
+                        }
+
+                        outputStream.write(textToPrint.getBytes("UTF-8"));
+                        outputStream.write("\n\n\n".getBytes());
+                        outputStream.flush();
+                        socket.close();
+                        isPrinted = true;
+                        printerName = device.getName();
+                        break;
+                    } catch (Exception e) {
+                        continue;
                     }
                 }
-                
-                if (isPrinted) { 
-                    final String pN = printerName; 
-                    runOnUiThread(new Runnable() { 
-                        @Override 
-                        public void run() { 
-                            webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(true, 'Berhasil mencetak di printer: " + pN + "');}", null); 
-                        } 
-                    }); 
-                } else { 
-                    notifyWebPrintFailed("Gagal terhubung ke seluruh printer paired."); 
+
+                if (isPrinted) {
+                    final String pN = printerName;
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            webView.evaluateJavascript("javascript:if(typeof onPrintResult === 'function'){onPrintResult(true, 'Berhasil mencetak di printer: " + pN + "');}", null);
+                        }
+                    });
+                } else {
+                    notifyWebPrintFailed("Gagal terhubung ke seluruh printer paired.");
                 }
             }
         }).start();
     }
 
     private byte[] decodeBitmapToEscPos(Bitmap bmp) {
-        int width = bmp.getWidth(); 
-        int height = bmp.getHeight(); 
-        int xBytes = (width + 7) / 8; 
+        int width = bmp.getWidth();
+        int height = bmp.getHeight();
+        int xBytes = (width + 7) / 8;
         byte[] data = new byte[8 + (xBytes * height)];
-        data[0] = 0x1D; data[1] = 0x76; data[2] = 0x30; data[3] = 0x00; 
-        data[4] = (byte) (xBytes % 256); data[5] = (byte) (xBytes / 256); 
-        data[6] = (byte) (height % 256); data[7] = (byte) (height / 256); 
+        data[0] = 0x1D; data[1] = 0x76; data[2] = 0x30; data[3] = 0x00;
+        data[4] = (byte) (xBytes % 256); data[5] = (byte) (xBytes / 256);
+        data[6] = (byte) (height % 256); data[7] = (byte) (height / 256);
         int idx = 8;
-        
-        for (int y = 0; y < height; y++) { 
-            for (int x = 0; x < xBytes * 8; x += 8) { 
-                byte b = 0; 
-                for (int k = 0; k < 8; k++) { 
-                    if (x + k < width) { 
-                        int pixel = bmp.getPixel(x + k, y); 
-                        if (Color.alpha(pixel) < 128) continue; 
-                        int luminance = (int) (Color.red(pixel) * 0.299 + Color.green(pixel) * 0.587 + Color.blue(pixel) * 0.114); 
-                        if (luminance < 235) { 
-                            b |= (1 << (7 - k)); 
-                        } 
-                    } 
-                } 
-                data[idx++] = b; 
-            } 
-        } 
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < xBytes * 8; x += 8) {
+                byte b = 0;
+                for (int k = 0; k < 8; k++) {
+                    if (x + k < width) {
+                        int pixel = bmp.getPixel(x + k, y);
+                        if (Color.alpha(pixel) < 128) continue;
+                        int luminance = (int) (Color.red(pixel) * 0.299 + Color.green(pixel) * 0.587 + Color.blue(pixel) * 0.114);
+                        if (luminance < 235) {
+                            b |= (1 << (7 - k));
+                        }
+                    }
+                }
+                data[idx++] = b;
+            }
+        }
         return data;
     }
 
     private void shareImage(String base64Data) {
-        try { 
-            byte[] decodedString = Base64.decode(base64Data, Base64.DEFAULT); 
-            Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length); 
-            File cachePath = new File(getCacheDir(), "images"); 
-            cachePath.mkdirs(); 
-            File file = new File(cachePath, "struk_curva_payment.png"); 
-            FileOutputStream stream = new FileOutputStream(file); 
-            decodedByte.compress(Bitmap.CompressFormat.PNG, 100, stream); 
-            stream.close(); 
+        try {
+            byte[] decodedString = Base64.decode(base64Data, Base64.DEFAULT);
+            Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+            File cachePath = new File(getCacheDir(), "images");
+            cachePath.mkdirs();
+            File file = new File(cachePath, "struk_curva_payment.png");
+            FileOutputStream stream = new FileOutputStream(file);
+            decodedByte.compress(Bitmap.CompressFormat.PNG, 100, stream);
+            stream.close();
             Uri contentUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", file);
-            
-            if (contentUri != null) { 
-                Intent shareIntent = new Intent(); 
-                shareIntent.setAction(Intent.ACTION_SEND); 
-                shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION); 
-                shareIntent.setDataAndType(contentUri, getContentResolver().getType(contentUri)); 
-                shareIntent.putExtra(Intent.EXTRA_STREAM, contentUri); 
-                shareIntent.putExtra(Intent.EXTRA_TEXT, "Berikut adalah bukti pembayaran dari Curva Payment."); 
-                startActivity(Intent.createChooser(shareIntent, "Bagikan Struk Melalui...")); 
+
+            if (contentUri != null) {
+                Intent shareIntent = new Intent();
+                shareIntent.setAction(Intent.ACTION_SEND);
+                shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                shareIntent.setDataAndType(contentUri, getContentResolver().getType(contentUri));
+                shareIntent.putExtra(Intent.EXTRA_STREAM, contentUri);
+                shareIntent.putExtra(Intent.EXTRA_TEXT, "Berikut adalah bukti pembayaran dari Curva Payment.");
+                startActivity(Intent.createChooser(shareIntent, "Bagikan Struk Melalui..."));
             }
         } catch (IOException e) { e.printStackTrace(); }
     }
 
     @android.webkit.JavascriptInterface
     private void shareReceiptText(String base64Data, String customCaption) {
-        try { 
-            byte[] decodedString = Base64.decode(base64Data, Base64.DEFAULT); 
-            Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length); 
-            File cachePath = new File(getCacheDir(), "images"); 
-            cachePath.mkdirs(); 
-            File file = new File(cachePath, "struk_pembayaran.png"); 
-            FileOutputStream stream = new FileOutputStream(file); 
-            decodedByte.compress(Bitmap.CompressFormat.PNG, 100, stream); 
-            stream.close(); 
+        try {
+            byte[] decodedString = Base64.decode(base64Data, Base64.DEFAULT);
+            Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+            File cachePath = new File(getCacheDir(), "images");
+            cachePath.mkdirs();
+            File file = new File(cachePath, "struk_pembayaran.png");
+            FileOutputStream stream = new FileOutputStream(file);
+            decodedByte.compress(Bitmap.CompressFormat.PNG, 100, stream);
+            stream.close();
             Uri contentUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", file);
-            
-            if (contentUri != null) { 
-                Intent shareIntent = new Intent(); 
-                shareIntent.setAction(Intent.ACTION_SEND); 
-                shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION); 
-                shareIntent.setDataAndType(contentUri, getContentResolver().getType(contentUri)); 
-                shareIntent.putExtra(Intent.EXTRA_STREAM, contentUri); 
-                shareIntent.putExtra(Intent.EXTRA_TEXT, customCaption); 
-                startActivity(Intent.createChooser(shareIntent, "Bagikan Struk Melalui...")); 
+
+            if (contentUri != null) {
+                Intent shareIntent = new Intent();
+                shareIntent.setAction(Intent.ACTION_SEND);
+                shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                shareIntent.setDataAndType(contentUri, getContentResolver().getType(contentUri));
+                shareIntent.putExtra(Intent.EXTRA_STREAM, contentUri);
+                shareIntent.putExtra(Intent.EXTRA_TEXT, customCaption);
+                startActivity(Intent.createChooser(shareIntent, "Bagikan Struk Melalui..."));
             }
-        } catch (IOException e) { 
-            e.printStackTrace(); 
-            showToast("Gagal memproses gambar struk"); 
+        } catch (IOException e) {
+            e.printStackTrace();
+            showToast("Gagal memproses gambar struk");
         }
     }
 
     @android.webkit.JavascriptInterface
     public void saveImage(String base64String, String fileName) {
-        try { 
-            byte[] decodedString = android.util.Base64.decode(base64String, android.util.Base64.DEFAULT); 
-            android.graphics.Bitmap bitmap = android.graphics.BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length); 
-            android.content.ContentValues values = new android.content.ContentValues(); 
-            values.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, fileName); 
-            values.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png"); 
-            if (android.os.Build.VERSION.SDK_INT >= 29) { 
-                values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 1); 
-            } 
-            
-            android.content.ContentResolver resolver = MainActivity.this.getContentResolver(); 
-            android.net.Uri uri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
-            
-            if (uri != null) { 
-                java.io.OutputStream out = resolver.openOutputStream(uri); 
-                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out); 
-                out.flush(); 
-                out.close(); 
-                if (android.os.Build.VERSION.SDK_INT >= 29) { 
-                    values.clear(); 
-                    values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0); 
-                    resolver.update(uri, values, null, null); 
-                } 
-                MainActivity.this.runOnUiThread(new Runnable() { 
-                    public void run() { 
-                        android.widget.Toast.makeText(MainActivity.this, "Gambar berhasil disimpan ke Galeri", android.widget.Toast.LENGTH_SHORT).show(); 
-                    } 
-                }); 
-            } else { 
-                throw new Exception("URI is null"); 
+        try {
+            byte[] decodedString = android.util.Base64.decode(base64String, android.util.Base64.DEFAULT);
+            android.graphics.Bitmap bitmap = android.graphics.BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+            android.content.ContentValues values = new android.content.ContentValues();
+            values.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, fileName);
+            values.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png");
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 1);
             }
-        } catch (Exception e) { 
-            e.printStackTrace(); 
-            MainActivity.this.runOnUiThread(new Runnable() { 
-                public void run() { 
-                    android.widget.Toast.makeText(MainActivity.this, "Gagal menyimpan gambar", android.widget.Toast.LENGTH_SHORT).show(); 
-                } 
-            }); 
+
+            android.content.ContentResolver resolver = MainActivity.this.getContentResolver();
+            android.net.Uri uri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+
+            if (uri != null) {
+                java.io.OutputStream out = resolver.openOutputStream(uri);
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out);
+                out.flush();
+                out.close();
+                if (android.os.Build.VERSION.SDK_INT >= 29) {
+                    values.clear();
+                    values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0);
+                    resolver.update(uri, values, null, null);
+                }
+                MainActivity.this.runOnUiThread(new Runnable() {
+                    public void run() {
+                        android.widget.Toast.makeText(MainActivity.this, "Gambar berhasil disimpan ke Galeri", android.widget.Toast.LENGTH_SHORT).show();
+                    }
+                });
+            } else {
+                throw new Exception("URI is null");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            MainActivity.this.runOnUiThread(new Runnable() {
+                public void run() {
+                    android.widget.Toast.makeText(MainActivity.this, "Gagal menyimpan gambar", android.widget.Toast.LENGTH_SHORT).show();
+                }
+            });
         }
     }
 
     private void scanBarcode() {
-        try { 
-            Intent intent = new Intent(this, CaptureActivity.class); 
-            intent.putExtra("SCAN_MODE", "QR_CODE_MODE,PRODUCT_MODE"); 
-            intent.putExtra("ORIENTATION_LOCK", true); 
-            startActivityForResult(intent, BARCODE_SCAN_REQUEST); 
-        } catch (Exception e) { 
-            try { 
-                Intent intent = new Intent("com.google.zxing.client.android.SCAN"); 
-                intent.putExtra("SCAN_MODE", "QR_CODE_MODE,PRODUCT_MODE"); 
-                startActivityForResult(intent, BARCODE_SCAN_REQUEST); 
-            } catch (Exception ex) {} 
+        try {
+            Intent intent = new Intent(this, CaptureActivity.class);
+            intent.putExtra("SCAN_MODE", "QR_CODE_MODE,PRODUCT_MODE");
+            intent.putExtra("ORIENTATION_LOCK", true);
+            startActivityForResult(intent, BARCODE_SCAN_REQUEST);
+        } catch (Exception e) {
+            try {
+                Intent intent = new Intent("com.google.zxing.client.android.SCAN");
+                intent.putExtra("SCAN_MODE", "QR_CODE_MODE,PRODUCT_MODE");
+                startActivityForResult(intent, BARCODE_SCAN_REQUEST);
+            } catch (Exception ex) {}
         }
     }
 
     private void openContactPicker() {
-        if (checkSelfPermission(android.Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) { 
-            requestPermissions(new String[]{android.Manifest.permission.READ_CONTACTS}, REQUEST_CONTACT_PERMISSION); 
-            return; 
+        if (checkSelfPermission(android.Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.READ_CONTACTS}, REQUEST_CONTACT_PERMISSION);
+            return;
         }
-        Intent intent = new Intent(Intent.ACTION_PICK); 
-        intent.setType(ContactsContract.CommonDataKinds.Phone.CONTENT_TYPE); 
+        Intent intent = new Intent(Intent.ACTION_PICK);
+        intent.setType(ContactsContract.CommonDataKinds.Phone.CONTENT_TYPE);
         startActivityForResult(intent, PICK_CONTACT_REQUEST);
     }
 
     private String getContactsFromDevice() {
-        if (checkSelfPermission(android.Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) { 
-            return "[]"; 
+        if (checkSelfPermission(android.Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            return "[]";
         }
-        JSONArray contactsArray = new JSONArray(); 
+        JSONArray contactsArray = new JSONArray();
         ContentResolver cr = getContentResolver();
-        
+
         try {
             Cursor cursor = cr.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, null, null, null, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC");
-            if (cursor != null && cursor.getCount() > 0) { 
-                int nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME); 
+            if (cursor != null && cursor.getCount() > 0) {
+                int nameIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME);
                 int phoneIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER);
-                while (cursor.moveToNext()) { 
-                    String name = cursor.getString(nameIndex); 
-                    String phone = cursor.getString(phoneIndex); 
-                    if (phone != null) { 
-                        phone = phone.replaceAll("[^0-9]", ""); 
-                        if (phone.startsWith("62")) { phone = "0" + phone.substring(2); } 
-                        if (phone.length() > 13) { phone = phone.substring(phone.length() - 13); } 
+                while (cursor.moveToNext()) {
+                    String name = cursor.getString(nameIndex);
+                    String phone = cursor.getString(phoneIndex);
+                    if (phone != null) {
+                        phone = phone.replaceAll("[^0-9]", "");
+                        if (phone.startsWith("62")) { phone = "0" + phone.substring(2); }
+                        if (phone.length() > 13) { phone = phone.substring(phone.length() - 13); }
                     }
-                    if (name != null && phone != null && phone.length() >= 10) { 
-                        JSONObject contact = new JSONObject(); 
-                        contact.put("name", name); 
-                        contact.put("tel", phone); 
-                        contactsArray.put(contact); 
+                    if (name != null && phone != null && phone.length() >= 10) {
+                        JSONObject contact = new JSONObject();
+                        contact.put("name", name);
+                        contact.put("tel", phone);
+                        contactsArray.put(contact);
                     }
-                } 
+                }
                 cursor.close();
             }
-        } catch (Exception e) {} 
-        
+        } catch (Exception e) {}
+
         return contactsArray.toString();
     }
 
-    private void requestContactPermission() { 
-        requestPermissions(new String[]{android.Manifest.permission.READ_CONTACTS}, REQUEST_CONTACT_PERMISSION); 
+    private void requestContactPermission() {
+        requestPermissions(new String[]{android.Manifest.permission.READ_CONTACTS}, REQUEST_CONTACT_PERMISSION);
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_CONTACT_PERMISSION) { 
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) { 
-                openContactPicker(); 
-            } else { 
-                webView.evaluateJavascript("javascript:onAndroidContactsError('Izin ditolak')", null); 
-            } 
-        } 
+        if (requestCode == REQUEST_CONTACT_PERMISSION) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                openContactPicker();
+            } else {
+                webView.evaluateJavascript("javascript:onAndroidContactsError('Izin ditolak')", null);
+            }
+        }
+        // [BARU] izin penyimpanan Android 9 ke bawah
+        if (requestCode == REQUEST_STORAGE_PERMISSION) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                showToast("Izin diberikan. Silakan tekan Download lagi.");
+            } else {
+                showToast("Izin penyimpanan ditolak. PDF tidak bisa disimpan.");
+            }
+        }
     }
 
     // =========================================================
-    // METODE PERBAIKAN WARNA STATUS BAR (DIJAMIN AMAN DARI PUTIH)
+    // WARNA STATUS BAR
     // =========================================================
     private void setSystemBarColors() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             Window window = getWindow();
             window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS | WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
             window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-            
+
             window.setStatusBarColor(Color.parseColor("#1791f4"));
             window.setNavigationBarColor(Color.WHITE);
-            
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                // Gunakan bitwise OR agar flag lain (seperti status bar) tidak terhapus
                 int flags = window.getDecorView().getSystemUiVisibility();
-                flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR; 
+                flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
                 window.getDecorView().setSystemUiVisibility(flags);
             }
         }
@@ -1423,82 +1598,82 @@ public class MainActivity extends Activity {
 
     private boolean isNetworkAvailable() {
         ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        if (connectivityManager != null) { 
-            NetworkInfo activeNetworkInfo = connectivityManager.getActiveNetworkInfo(); 
-            return activeNetworkInfo != null && activeNetworkInfo.isConnected(); 
-        } 
+        if (connectivityManager != null) {
+            NetworkInfo activeNetworkInfo = connectivityManager.getActiveNetworkInfo();
+            return activeNetworkInfo != null && activeNetworkInfo.isConnected();
+        }
         return false;
     }
 
-    private void setupCookies() { 
-        CookieManager cookieManager = CookieManager.getInstance(); 
-        cookieManager.setAcceptCookie(true); 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) { 
-            cookieManager.setAcceptThirdPartyCookies(webView, true); 
-        } 
+    private void setupCookies() {
+        CookieManager cookieManager = CookieManager.getInstance();
+        cookieManager.setAcceptCookie(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            cookieManager.setAcceptThirdPartyCookies(webView, true);
+        }
     }
-    
-    private void saveCookies() { 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) { 
-            CookieManager.getInstance().flush(); 
-        } 
+
+    private void saveCookies() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            CookieManager.getInstance().flush();
+        }
     }
 
     private void loadFcmToken() {
-        try { 
-            com.google.firebase.messaging.FirebaseMessaging.getInstance().getToken().addOnCompleteListener(new com.google.android.gms.tasks.OnCompleteListener<String>() { 
-                @Override 
-                public void onComplete(com.google.android.gms.tasks.Task<String> task) { 
-                    if (!task.isSuccessful()) { fcmToken = ""; return; } 
-                    fcmToken = task.getResult(); 
-                    sendFcmTokenToWeb(); 
-                } 
-            }); 
-        } catch (Exception e) { 
-            fcmToken = ""; 
+        try {
+            com.google.firebase.messaging.FirebaseMessaging.getInstance().getToken().addOnCompleteListener(new com.google.android.gms.tasks.OnCompleteListener<String>() {
+                @Override
+                public void onComplete(com.google.android.gms.tasks.Task<String> task) {
+                    if (!task.isSuccessful()) { fcmToken = ""; return; }
+                    fcmToken = task.getResult();
+                    sendFcmTokenToWeb();
+                }
+            });
+        } catch (Exception e) {
+            fcmToken = "";
         }
     }
 
     public void sendFcmTokenToWeb() {
-        if (fcmToken == null || fcmToken.equals("")) { loadFcmToken(); } 
+        if (fcmToken == null || fcmToken.equals("")) { loadFcmToken(); }
         if (fcmToken == null || fcmToken.equals("")) { return; }
-        
-        try { 
-            String token = java.net.URLEncoder.encode(fcmToken, "UTF-8"); 
-            String device = java.net.URLEncoder.encode("Android WebView", "UTF-8"); 
+
+        try {
+            String token = java.net.URLEncoder.encode(fcmToken, "UTF-8");
+            String device = java.net.URLEncoder.encode("Android WebView", "UTF-8");
             final String js = "javascript:(function(){ try{var xhr=new XMLHttpRequest(); xhr.open('POST','" + getRootApiUrl() + "api/save_fcm_token.php',true); xhr.setRequestHeader('Content-Type','application/x-www-form-urlencoded'); xhr.send('token=" + token + "&device_name=" + device + "');}catch(e){} })()";
-            
-            webView.post(new Runnable() { 
-                @Override 
-                public void run() { 
-                    webView.evaluateJavascript(js, null); 
-                } 
+
+            webView.post(new Runnable() {
+                @Override
+                public void run() {
+                    webView.evaluateJavascript(js, null);
+                }
             });
-        } catch (Exception e) { 
-            e.printStackTrace(); 
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
-    public void showToast(final String message) { 
-        runOnUiThread(new Runnable() { 
-            @Override 
-            public void run() { 
-                Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show(); 
-            } 
-        }); 
+    public void showToast(final String message) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     private void openAppNative(String url) {
-        try { 
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); 
-        } catch (Exception e) { 
-            try { 
-                if (url.startsWith("whatsapp://")) { 
-                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url.replace("whatsapp://send?phone=", "https://wa.me/")))); 
-                } else if (url.startsWith("tg://")) { 
-                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url.replace("tg://resolve?domain=", "https://t.me/")))); 
-                } 
-            } catch (Exception ex) {} 
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (Exception e) {
+            try {
+                if (url.startsWith("whatsapp://")) {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url.replace("whatsapp://send?phone=", "https://wa.me/"))));
+                } else if (url.startsWith("tg://")) {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url.replace("tg://resolve?domain=", "https://t.me/"))));
+                }
+            } catch (Exception ex) {}
         }
     }
 
@@ -1531,7 +1706,7 @@ public class MainActivity extends Activity {
                 unlockAppAndHideSplash();
             } else {
                 showToast("Autentikasi batal/gagal.");
-                finish(); 
+                finish();
             }
             return;
         }
@@ -1548,9 +1723,9 @@ public class MainActivity extends Activity {
                     cursor.close();
 
                     if (number != null) {
-                        number = number.replaceAll("[^0-9]", ""); 
+                        number = number.replaceAll("[^0-9]", "");
                         if (number.startsWith("62")) {
-                            number = "0" + number.substring(2); 
+                            number = "0" + number.substring(2);
                         }
                     }
 
@@ -1589,7 +1764,7 @@ public class MainActivity extends Activity {
                         if (result != null) scanResult = result.getContents();
                     } catch (Exception e) {}
                 }
-                
+
                 final String finalScanResult = scanResult;
                 if (finalScanResult != null) {
                     runOnUiThread(new Runnable() {

@@ -97,8 +97,12 @@ public class MainActivity extends Activity {
     private static final int BARCODE_SCAN_REQUEST = 1004;
     private static final int REQUEST_BLUETOOTH_PERMISSION = 1005;
     private static final int REQUEST_NOTIFICATION_PERMISSION = 1006;
-    private static final int REQUEST_STORAGE_PERMISSION = 1007; // [BARU] Android 9 ke bawah
+    private static final int REQUEST_STORAGE_PERMISSION = 1007; // Android 9 ke bawah
     private static final int REQUEST_APP_LOCK = 9999;
+
+    // [BARU] Warna latar halaman web (samakan dengan body halaman: #f3f4f6)
+    private static final String PAGE_BG_COLOR = "#F3F4F6";
+    private static final String THEME_COLOR = "#1791f4";
 
     private boolean isAppUnlocked = false;
     private boolean doubleBackToExitPressedOnce = false;
@@ -195,9 +199,13 @@ public class MainActivity extends Activity {
 
         setSystemBarColors();
 
-        // 1. ROOT UTAMA (biru)
+        // [BARU] Window background juga diabuabukan agar tidak ada kilatan biru saat resize keyboard
+        getWindow().setBackgroundDrawable(
+                new android.graphics.drawable.ColorDrawable(Color.parseColor(PAGE_BG_COLOR)));
+
+        // 1. ROOT UTAMA  [DIUBAH: dari biru menjadi abu-abu halaman]
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(Color.parseColor("#1791f4"));
+        root.setBackgroundColor(Color.parseColor(PAGE_BG_COLOR));
 
         // 2. KOTAK PUTIH DI BAWAH
         View bottomWhiteBg = new View(this);
@@ -208,11 +216,28 @@ public class MainActivity extends Activity {
         bottomParams.gravity = Gravity.BOTTOM;
         root.addView(bottomWhiteBg, bottomParams);
 
+        // [BARU] STRIP BIRU DI ATAS (zona status bar), karena root sudah tidak biru lagi.
+        // Ditambahkan sebelum contentWrapper sehingga berada di bawahnya (tidak menutupi halaman).
+        int statusId = getResources().getIdentifier("status_bar_height", "dimen", "android");
+        int statusH = statusId > 0
+                ? getResources().getDimensionPixelSize(statusId)
+                : (int) (24 * getResources().getDisplayMetrics().density);
+        View topBlue = new View(this);
+        topBlue.setBackgroundColor(Color.parseColor(THEME_COLOR));
+        FrameLayout.LayoutParams topParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, statusH);
+        topParams.gravity = Gravity.TOP;
+        root.addView(topBlue, topParams);
+
         // 3. PEMBUNGKUS WEBVIEW
         FrameLayout contentWrapper = new FrameLayout(this);
         contentWrapper.setFitsSystemWindows(true);
+        // [BARU] latar pembungkus ikut abu-abu halaman
+        contentWrapper.setBackgroundColor(Color.parseColor(PAGE_BG_COLOR));
 
         webView = new NoAutofillWebView(this);
+        // [BARU] latar WebView abu-abu halaman (inilah yang terlihat saat resize)
+        webView.setBackgroundColor(Color.parseColor(PAGE_BG_COLOR));
 
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
@@ -240,7 +265,7 @@ public class MainActivity extends Activity {
 
         // 4. SPLASH SCREEN
         splash = new RelativeLayout(this);
-        splash.setBackgroundColor(Color.parseColor("#1791f4"));
+        splash.setBackgroundColor(Color.parseColor(THEME_COLOR));
         splash.setClickable(true);
         splash.setFocusable(true);
 
@@ -334,7 +359,7 @@ public class MainActivity extends Activity {
                     } catch (Exception e) {}
                     return true;
                 }
-                // [BARU] biarkan URL unduhan ditangani WebView -> DownloadListener
+                // biarkan URL unduhan ditangani WebView -> DownloadListener
                 return false;
             }
 
@@ -763,7 +788,7 @@ public class MainActivity extends Activity {
     }
 
     // =================================================================
-    // SHIM BRIDGE  [BARU: savePdf & saveFile di 2 baris terakhir]
+    // SHIM BRIDGE  (termasuk savePdf & saveFile)
     // =================================================================
     private void injectAndroidBridge() {
         String js = "javascript:(function(){ if (typeof window.Android === 'undefined') { window.Android = {" +
@@ -867,7 +892,7 @@ public class MainActivity extends Activity {
                 result.confirm("");
                 return true;
 
-            // ================= [BARU] SIMPAN PDF / FILE =================
+            // ================= SIMPAN PDF / FILE =================
             } else if (action.equals("savePdf") || action.equals("saveFile")) {
                 String b64   = defaultValue == null ? "" : defaultValue;
                 String fname = "Branding.pdf";
@@ -881,7 +906,7 @@ public class MainActivity extends Activity {
                 result.confirm("OK");              // lepas blokir JS dulu
                 savePdfNative(b64, fname, mime);   // kerja berat di thread latar
                 return true;
-            // ============================================================
+            // =====================================================
 
             } else if (action.equals("printReceipt")) {
                 String textToPrint = defaultValue;
@@ -981,7 +1006,7 @@ public class MainActivity extends Activity {
         });
 
         // =================================================================
-        // [BARU] DOWNLOAD LISTENER (untuk URL server / file non-blob)
+        // DOWNLOAD LISTENER (untuk URL server / file non-blob)
         // =================================================================
         webView.setDownloadListener(new DownloadListener() {
             @Override
@@ -1020,7 +1045,7 @@ public class MainActivity extends Activity {
     }
 
     // =================================================================
-    // [BARU] SIMPAN PDF KE FOLDER DOWNLOAD PUBLIK
+    // SIMPAN PDF KE FOLDER DOWNLOAD PUBLIK
     // =================================================================
     private void savePdfNative(final String base64String, final String fileName, final String mimeType) {
         new Thread(new Runnable() {
@@ -1112,7 +1137,7 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    // [BARU] buka file dengan aplikasi pembaca PDF (bila ada)
+    // buka file dengan aplikasi pembaca PDF (bila ada)
     private void openSavedPdf(final Uri uri, final String mime) {
         if (uri == null) return;
         runOnUiThread(new Runnable() {
@@ -1131,7 +1156,7 @@ public class MainActivity extends Activity {
         });
     }
 
-    // [BARU] laporan hasil kembali ke halaman web + toast native
+    // laporan hasil kembali ke halaman web + toast native
     private void notifyPdfResult(final boolean ok, final String msg) {
         runOnUiThread(new Runnable() {
             @Override
@@ -1566,7 +1591,7 @@ public class MainActivity extends Activity {
                 webView.evaluateJavascript("javascript:onAndroidContactsError('Izin ditolak')", null);
             }
         }
-        // [BARU] izin penyimpanan Android 9 ke bawah
+        // izin penyimpanan Android 9 ke bawah
         if (requestCode == REQUEST_STORAGE_PERMISSION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 showToast("Izin diberikan. Silakan tekan Download lagi.");

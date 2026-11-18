@@ -232,8 +232,7 @@ public class MainActivity extends Activity {
         // 3. PEMBUNGKUS WEBVIEW
         FrameLayout contentWrapper = new FrameLayout(this);
         contentWrapper.setFitsSystemWindows(true);
-        // [BARU] latar pembungkus ikut abu-abu halaman
-        contentWrapper.setBackgroundColor(Color.parseColor(PAGE_BG_COLOR));
+        // contentWrapper sengaja TRANSPARAN agar strip biru status bar (topBlue) terlihat
 
         webView = new NoAutofillWebView(this);
         // [BARU] latar WebView abu-abu halaman (inilah yang terlihat saat resize)

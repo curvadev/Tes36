@@ -100,18 +100,23 @@ public class MainActivity extends Activity {
     private static final int REQUEST_STORAGE_PERMISSION = 1007; // Android 9 ke bawah
     private static final int REQUEST_APP_LOCK = 9999;
 
-    // [BARU] Warna latar halaman web (samakan dengan body halaman: #f3f4f6)
+    // Warna latar halaman web (samakan dengan body halaman: #f3f4f6)
     private static final String PAGE_BG_COLOR = "#F3F4F6";
     private static final String THEME_COLOR = "#1791f4";
 
     private boolean isAppUnlocked = false;
     private boolean doubleBackToExitPressedOnce = false;
 
+    // [BARU] Status splash: hilang hanya jika app lock lolos DAN halaman sudah termuat
+    private boolean pageReady = false;
+    private boolean lockPassed = false;
+    private boolean splashHidden = false;
+
     // =======================================================
     // TARGET GITHUB ACTIONS (JANGAN UBAH BARIS INI MANUAL)
     // =======================================================
     private String APP_URL = "https://curva.web.id/ppob/"; 
-    public int SPLASH_TIME = 3000;
+    public int SPLASH_TIME = 1000; // [DIUBAH] waktu tampil minimal (ms), sebelumnya 3000
     // =======================================================
 
     // =========================================
@@ -158,30 +163,55 @@ public class MainActivity extends Activity {
         return url.replace("admin/", "");
     }
 
+    // =========================================
+    // [BARU] SPINNER DOT ORBIT
+    // 8 titik melingkar, titik terdepan paling besar & terang,
+    // titik di belakangnya mengecil dan memudar (efek ekor komet).
+    // =========================================
     private class ModernSpinner extends View {
-        private android.graphics.Paint paint;
-        private android.graphics.RectF rect;
-        private float angle = 0;
+        private static final int DOT_COUNT = 8;
+        private static final long CYCLE_MS = 900L;
+
+        private final android.graphics.Paint dotPaint;
+        private final float maxDot;
+        private final float minDot;
+        private final long startTime = android.os.SystemClock.uptimeMillis();
 
         public ModernSpinner(Context context) {
             super(context);
-            paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-            paint.setColor(Color.WHITE);
-            paint.setStyle(android.graphics.Paint.Style.STROKE);
-            paint.setStrokeWidth(context.getResources().getDisplayMetrics().density * 2.5f);
-            paint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
-            rect = new android.graphics.RectF();
+            float density = context.getResources().getDisplayMetrics().density;
+            maxDot = density * 3.2f;
+            minDot = density * 1.1f;
+            dotPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            dotPaint.setColor(Color.WHITE);
+            dotPaint.setStyle(android.graphics.Paint.Style.FILL);
         }
 
         @Override
         protected void onDraw(android.graphics.Canvas canvas) {
             super.onDraw(canvas);
-            float pad = paint.getStrokeWidth() / 2f + 1f;
-            rect.set(pad, pad, getWidth() - pad, getHeight() - pad);
-            canvas.drawArc(rect, angle, 270, false, paint);
-            angle += 8;
-            if (angle >= 360) angle -= 360;
-            invalidate();
+
+            long t = android.os.SystemClock.uptimeMillis() - startTime;
+            float head = ((t % CYCLE_MS) / (float) CYCLE_MS) * DOT_COUNT;
+
+            float cx = getWidth() / 2f;
+            float cy = getHeight() / 2f;
+            float orbit = Math.min(getWidth(), getHeight()) / 2f - maxDot - 1f;
+
+            for (int i = 0; i < DOT_COUNT; i++) {
+                double angle = Math.toRadians(i * (360.0 / DOT_COUNT) - 90.0);
+                float x = cx + (float) Math.cos(angle) * orbit;
+                float y = cy + (float) Math.sin(angle) * orbit;
+
+                // jarak titik i di belakang "kepala" (0 = kepala)
+                float behind = (head - i + DOT_COUNT) % DOT_COUNT;
+                float intensity = 1f - (behind / DOT_COUNT);
+                intensity = intensity * intensity;
+
+                dotPaint.setAlpha((int) (50 + 205 * intensity));
+                canvas.drawCircle(x, y, minDot + (maxDot - minDot) * intensity, dotPaint);
+            }
+            postInvalidateOnAnimation();
         }
     }
 
@@ -199,11 +229,11 @@ public class MainActivity extends Activity {
 
         setSystemBarColors();
 
-        // [BARU] Window background juga diabuabukan agar tidak ada kilatan biru saat resize keyboard
+        // Window background juga diabu-abukan agar tidak ada kilatan biru saat resize keyboard
         getWindow().setBackgroundDrawable(
                 new android.graphics.drawable.ColorDrawable(Color.parseColor(PAGE_BG_COLOR)));
 
-        // 1. ROOT UTAMA  [DIUBAH: dari biru menjadi abu-abu halaman]
+        // 1. ROOT UTAMA
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.parseColor(PAGE_BG_COLOR));
 
@@ -216,8 +246,7 @@ public class MainActivity extends Activity {
         bottomParams.gravity = Gravity.BOTTOM;
         root.addView(bottomWhiteBg, bottomParams);
 
-        // [BARU] STRIP BIRU DI ATAS (zona status bar), karena root sudah tidak biru lagi.
-        // Ditambahkan sebelum contentWrapper sehingga berada di bawahnya (tidak menutupi halaman).
+        // STRIP BIRU DI ATAS (zona status bar)
         int statusId = getResources().getIdentifier("status_bar_height", "dimen", "android");
         int statusH = statusId > 0
                 ? getResources().getDimensionPixelSize(statusId)
@@ -235,7 +264,6 @@ public class MainActivity extends Activity {
         // contentWrapper sengaja TRANSPARAN agar strip biru status bar (topBlue) terlihat
 
         webView = new NoAutofillWebView(this);
-        // [BARU] latar WebView abu-abu halaman (inilah yang terlihat saat resize)
         webView.setBackgroundColor(Color.parseColor(PAGE_BG_COLOR));
 
         webView.setFocusable(true);
@@ -291,10 +319,10 @@ public class MainActivity extends Activity {
 
         ModernSpinner spinner = new ModernSpinner(this);
         LinearLayout.LayoutParams spinnerParams = new LinearLayout.LayoutParams(
-                (int) (20 * getResources().getDisplayMetrics().density),
-                (int) (20 * getResources().getDisplayMetrics().density)
+                (int) (28 * getResources().getDisplayMetrics().density),
+                (int) (28 * getResources().getDisplayMetrics().density)
         );
-        spinnerParams.rightMargin = (int) (8 * getResources().getDisplayMetrics().density);
+        spinnerParams.rightMargin = (int) (10 * getResources().getDisplayMetrics().density);
         spinner.setLayoutParams(spinnerParams);
 
         TextView loadingText = new TextView(this);
@@ -330,10 +358,16 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(root);
 
+        // [BARU] animasi masuk splash: loading muncul halus, background zoom pelan
+        bottomLayout.setAlpha(0f);
+        bottomLayout.animate().alpha(1f).setDuration(350).start();
+        bgImage.animate().scaleX(1.06f).scaleY(1.06f).setDuration(2500).start();
+
         disableAutofill(root, contentWrapper);
 
         if (SPLASH_TIME <= 0) {
             splash.setVisibility(View.GONE);
+            splashHidden = true;
             isAppUnlocked = true;
             checkNotificationPermission();
 
@@ -371,6 +405,10 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
+
+                // [BARU] halaman sudah siap -> splash boleh hilang
+                pageReady = true;
+                tryHideSplash();
 
                 saveCookies();
                 injectAndroidBridge();
@@ -427,6 +465,15 @@ public class MainActivity extends Activity {
                     triggerNativeAppLock();
                 }
             }, SPLASH_TIME);
+
+            // [BARU] batas aman: splash tidak akan menggantung lebih dari 5 detik
+            splashHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    pageReady = true;
+                    tryHideSplash();
+                }
+            }, 5000);
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -556,10 +603,18 @@ public class MainActivity extends Activity {
         unlockAppAndHideSplash();
     }
 
+    // [DIUBAH] hanya menandai lock lolos; splash hilang lewat tryHideSplash()
     private void unlockAppAndHideSplash() {
         isAppUnlocked = true;
-        splash.animate().alpha(0f).setDuration(450);
-        delayHandler.postDelayed(new Runnable() {
+        lockPassed = true;
+        tryHideSplash();
+    }
+
+    // [BARU] splash hilang jika app lock lolos DAN halaman sudah termuat
+    private void tryHideSplash() {
+        if (splashHidden || !lockPassed || !pageReady) return;
+        splashHidden = true;
+        splash.animate().alpha(0f).setDuration(250).withEndAction(new Runnable() {
             @Override
             public void run() {
                 splash.setVisibility(View.GONE);
@@ -569,7 +624,7 @@ public class MainActivity extends Activity {
                     checkForAppUpdate();
                 }
             }
-        }, 500);
+        }).start();
     }
 
     private void checkNotificationPermission() {
